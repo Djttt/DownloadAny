@@ -29,6 +29,8 @@ pub struct JobRecord {
     pub id: u64,
     pub url: String,
     pub title: String,
+    /// 重试时原样重新入队（types.ts 同步）
+    pub format_id: String,
     pub format_label: String,
     pub status: JobStatus,
     pub percent: f64,
@@ -158,6 +160,7 @@ pub async fn enqueue(app: &AppHandle, state: &AppState, opts: DownloadOptions) -
         id,
         url: opts.url.clone(),
         title: opts.title.clone().unwrap_or_else(|| opts.url.clone()),
+        format_id: opts.format_id.clone(),
         format_label: opts.format_label.clone().unwrap_or_else(|| opts.format_id.clone()),
         status: JobStatus::Queued,
         percent: 0.0,

@@ -6,7 +6,6 @@ use crate::probe::VideoInfo;
 use crate::queue::{self, AppState, DownloadOptions, JobRecord};
 use crate::resolve;
 use serde::Serialize;
-use std::process::Stdio;
 use tauri::{AppHandle, State};
 
 #[tauri::command]
@@ -35,7 +34,7 @@ pub fn list_jobs(state: State<'_, AppState>) -> Result<Vec<JobRecord>, AppError>
     Ok(state.list())
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DependencyInfo {
     pub yt_dlp_version: Option<String>,
@@ -45,37 +44,52 @@ pub struct DependencyInfo {
     pub ffmpeg_source: String,
 }
 
-/// 依赖状态（前端底部指示器）
+/// 依赖状态（前端底部指示器）。PyInstaller 静态包冷启动可能要十几秒，
+/// 放宽超时并 OnceLock 缓存：整个进程生命周期只真正探测一次。
+static DEP_CACHE: std::sync::OnceLock<DependencyInfo> = std::sync::OnceLock::new();
+
 #[tauri::command]
 pub async fn dependency_info() -> Result<DependencyInfo, AppError> {
+    if let Some(cached) = DEP_CACHE.get() {
+        return Ok(cached.clone());
+    }
     let yt = resolve::yt_dlp();
     let ff = resolve::ffmpeg();
-    let (yt_ver, ff_ver) = tokio::join!(version_of(&yt), version_of(&ff));
-    Ok(DependencyInfo {
+    // ffmpeg 只认单横线 -version
+    let (yt_ver, ff_ver) = tokio::join!(version_of(&yt, "--version", 45), version_of(&ff, "-version", 20));
+    let info = DependencyInfo {
         yt_dlp_version: yt_ver,
         yt_dlp_source: yt.source().into(),
         yt_dlp_path: yt.display(),
         ffmpeg_version: ff_ver,
         ffmpeg_source: ff.source().into(),
-    })
+    };
+    let _ = DEP_CACHE.set(info.clone());
+    Ok(info)
 }
 
-async fn version_of(program: &resolve::Program) -> Option<String> {
+async fn version_of(program: &resolve::Program, flag: &str, timeout_secs: u64) -> Option<String> {
     let mut cmd = program.command();
-    cmd.arg("--version")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+    cmd.arg(flag)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
         .kill_on_drop(true);
-    let out = tokio::time::timeout(std::time::Duration::from_secs(10), cmd.output())
+    let out = tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), cmd.output())
         .await
         .ok()?
         .ok()?;
-    if out.status.success() {
-        String::from_utf8_lossy(&out.stdout)
-            .lines()
-            .next()
-            .map(|s| s.trim().to_string())
-    } else {
-        None
+    if !out.status.success() {
+        return None;
     }
+    let first = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .next()?
+        .trim()
+        .to_string();
+    // ffmpeg 首行是 "ffmpeg version 7.1.1 Copyright (c)…"，只取版本号；
+    // yt-dlp 首行本身就是裸版本号
+    Some(match first.split_once("version ") {
+        Some((_, rest)) => rest.split_whitespace().next().unwrap_or(rest).to_string(),
+        None => first,
+    })
 }

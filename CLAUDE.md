@@ -25,7 +25,7 @@ cd src-tauri && cargo test --lib -- --nocapture
 ## Sidecar 二进制
 
 - `scripts/fetch-binaries.mjs` 在 dev/build 前自动运行，产物放入 `src-tauri/binaries/<name>-<target-triple>`（已 gitignore，勿提交）
-- 解析优先级（Rust 侧 `resolve.rs` 与脚本保持一致的 triple 映射）：**打包目录（与主程序同级，Tauri 会剥掉 triple 后缀）→ binaries/ 预置 → 系统 PATH**
+- 解析优先级（Rust 侧 `resolve.rs` 与脚本保持一致的 triple 映射）：**开发态：系统 PATH → binaries/ 预置；打包态：与主程序同目录的内置二进制（Tauri 会剥掉 triple 后缀）→ PATH**。开发态优先 PATH 是刻意的：官方 PyInstaller 静态包（yt-dlp_macos）在 macOS 上每次 spawn 有 ~13s 启动开销（系统评估+解包），brew/zipapp 版秒级；打包态内置优先则保证开箱即用
 - yt-dlp 从 GitHub releases 下载并按官方 SHA-256SUMS 校验；失败回退复制系统版本（会实跑 `--version` 验证）。脚本经 undici `EnvHttpProxyAgent` 遵循 `HTTPS_PROXY` 等环境变量（Node fetch 默认不读，勿退回裸 fetch）。**yt-dlp 版本必须紧跟上游**——YouTube 反爬会拒绝旧版（"The page needs to be reloaded"），定期 `DOWNLOADANY_FORCE=1` 刷新
 - FFmpeg 仅在打包态通过 `--ffmpeg-location <sidecar目录>` 显式传给 yt-dlp；开发态走 PATH（要求本机装 ffmpeg）
 
@@ -48,9 +48,11 @@ Rust 侧（`src-tauri/src/`，一模块一职责）：
 
 前端（`src/`）：
 
-- `types.ts` 是前后端契约，**必须镜像 Rust serde 结构（全部 `#[serde(rename_all = "camelCase")]`）**；改 Rust 结构必须同步改这里
+- 界面为浅色侧栏布局（参考 SnapAny）：侧栏（下载/历史视图切换）+ UrlBar + 自动下载开关 + 表式任务列表（行内进度与"状态子行"）+ 底部保存目录栏。令牌定义在 `App.css` `:root`
+- `types.ts` 是前后端契约，**必须镜像 Rust serde 结构（全部 `#[serde(rename_all = "camelCase")]`）**；改 Rust 结构必须同步改这里（如 `JobRecord.formatId` 支撑失败重试）
 - `App.tsx` 以 jobId 归并三个事件到 `jobs`/`logs` map；骨架记录可能先于 invoke resolve 到达，upsert 时勿覆盖未知字段。队列是纯内存的，重启即空（页面 HMR 重载后 Rust 状态还在，靠 `list_jobs` hydration 找回）
-- 设置（下载目录）用 `@tauri-apps/plugin-store`；目录选择用 `@tauri-apps/plugin-dialog`
+- 设置（下载目录、自动下载）用 `@tauri-apps/plugin-store`；目录选择用 `@tauri-apps/plugin-dialog`；已完成任务的"在文件夹中显示"用 `@tauri-apps/plugin-opener` 的 `revealItemInDir`
+- ffmpeg 只认单横线 `-version`（yt-dlp 用 `--version`）——版本探测与脚本校验都按工具区分参数；`dependency_info` 有 OnceLock 缓存避免重复付费
 
 ## 约定与陷阱
 

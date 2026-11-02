@@ -62,7 +62,15 @@ fn bin_file_name(name: &str) -> String {
 }
 
 fn resolve(name: &str) -> Program {
-    // 1. 打包态：与主程序同目录
+    // 开发态优先系统 PATH：官方 PyInstaller 静态包在 macOS 上每次 spawn 有
+    // ~13s 的启动开销（系统评估+解包），brew/zipapp 版秒级，开发体验优先；
+    // 打包态仍优先内置（开箱即用是分发的前提）。
+    #[cfg(debug_assertions)]
+    if exists_on_path(name) {
+        return Program::FromPath(if name == "yt-dlp" { "yt-dlp" } else { "ffmpeg" });
+    }
+
+    // 打包态：与主程序同目录
     if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(|d| d.to_path_buf())) {
         let candidate = dir.join(bin_file_name(name));
         if candidate.is_file() {
@@ -70,7 +78,7 @@ fn resolve(name: &str) -> Program {
         }
     }
 
-    // 2. 开发态：src-tauri/binaries/<name>-<target-triple>
+    // 开发态回退：src-tauri/binaries/<name>-<target-triple>（PATH 没装时）
     if cfg!(debug_assertions) {
         if let Some(triple) = target_triple() {
             let suffix = std::env::consts::EXE_SUFFIX;
@@ -83,11 +91,19 @@ fn resolve(name: &str) -> Program {
         }
     }
 
-    // 3. 系统 PATH（tokio::process 在 Windows 上也能通过 PATH 解析 .exe）
-    Program::FromPath(match name {
-        "yt-dlp" => "yt-dlp",
-        _ => "ffmpeg",
-    })
+    // 最后兜底 PATH（Windows 上 where 找不到也能经 CreateProcess 解析）
+    Program::FromPath(if name == "yt-dlp" { "yt-dlp" } else { "ffmpeg" })
+}
+
+/// 用 which/where 探测 PATH 是否有该命令——不实际执行，零启动成本
+fn exists_on_path(name: &str) -> bool {
+    let probe = if cfg!(windows) { "where" } else { "which" };
+    std::process::Command::new(probe)
+        .arg(name)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
 }
 
 /// 与 scripts/fetch-binaries.mjs 中的映射保持一致

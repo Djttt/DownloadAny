@@ -24,6 +24,7 @@ export interface JobRecord {
   id: number;
   url: string;
   title: string;
+  formatId: string;
   formatLabel: string;
   status: JobStatus;
   percent: number;
