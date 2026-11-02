@@ -11,6 +11,10 @@
 
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
+// Node 的 fetch 默认不读 *_PROXY 环境变量；挂上 EnvHttpProxyAgent 才会走系统代理
+import { EnvHttpProxyAgent, setGlobalDispatcher } from "undici";
+
+setGlobalDispatcher(new EnvHttpProxyAgent());
 import {
   chmodSync,
   copyFileSync,

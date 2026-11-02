@@ -45,6 +45,9 @@ importers:
       typescript:
         specifier: ~6.0.3
         version: 6.0.3
+      undici:
+        specifier: ^8.12.3
+        version: 8.12.3
       vite:
         specifier: ^8.0.16
         version: 8.3.5
@@ -477,6 +480,10 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
+  undici@8.12.3:
+    resolution: {integrity: sha512-+fdndUTwBP86cVjihTp21hZHo7d6oj1c/47XPA3lL8mM0XHs+C4EkcjmgRsFnFk2f/UONGDy9ItBItmXsLOQHw==}
+    engines: {node: '>=22.19.0'}
+
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
 
@@ -832,6 +839,8 @@ snapshots:
   typedarray@0.0.6: {}
 
   typescript@6.0.3: {}
+
+  undici@8.12.3: {}
 
   util-deprecate@1.0.2: {}
 

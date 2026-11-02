@@ -41,7 +41,7 @@ pnpm install          # 安装依赖（ffmpeg-static 的构建脚本已在 packa
 pnpm tauri dev        # 启动开发实例（自动先运行 fetch-binaries.mjs 预置二进制）
 ```
 
-首次运行会下载 sidecar 二进制到 `src-tauri/binaries/`（已 gitignore）。若所在网络无法直连 GitHub，脚本会回退复制系统安装的 yt-dlp 并实跑 `--version` 验证（回退版本仅保证本机可用，**不可用于分发**）。
+首次运行会下载 sidecar 二进制到 `src-tauri/binaries/`（已 gitignore），自动遵循 `HTTPS_PROXY` 等代理环境变量。若所在网络无法访问 GitHub，脚本会回退复制系统安装的 yt-dlp 并实跑 `--version` 验证（回退版本仅保证本机可用，**不可用于分发**）。注意 yt-dlp 需保持较新版本，旧版会被 YouTube 反爬拒绝，可用 `DOWNLOADANY_FORCE=1 node scripts/fetch-binaries.mjs` 刷新。
 
 测试与类型检查：
 

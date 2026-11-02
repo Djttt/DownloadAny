@@ -26,7 +26,7 @@ cd src-tauri && cargo test --lib -- --nocapture
 
 - `scripts/fetch-binaries.mjs` 在 dev/build 前自动运行，产物放入 `src-tauri/binaries/<name>-<target-triple>`（已 gitignore，勿提交）
 - 解析优先级（Rust 侧 `resolve.rs` 与脚本保持一致的 triple 映射）：**打包目录（与主程序同级，Tauri 会剥掉 triple 后缀）→ binaries/ 预置 → 系统 PATH**
-- yt-dlp 从 GitHub releases 下载并按官方 SHA-256SUMS 校验；失败回退复制系统版本（会实跑 `--version` 验证）。**注意：脚本目前不识别 HTTPS_PROXY 环境变量**——在需要代理的网络环境下 GitHub 直连会失败、静默走 Homebrew 回退版；分发构建需在能直连 GitHub 的环境执行，或先解决代理
+- yt-dlp 从 GitHub releases 下载并按官方 SHA-256SUMS 校验；失败回退复制系统版本（会实跑 `--version` 验证）。脚本经 undici `EnvHttpProxyAgent` 遵循 `HTTPS_PROXY` 等环境变量（Node fetch 默认不读，勿退回裸 fetch）。**yt-dlp 版本必须紧跟上游**——YouTube 反爬会拒绝旧版（"The page needs to be reloaded"），定期 `DOWNLOADANY_FORCE=1` 刷新
 - FFmpeg 仅在打包态通过 `--ffmpeg-location <sidecar目录>` 显式传给 yt-dlp；开发态走 PATH（要求本机装 ffmpeg）
 
 ## 架构（三层）
