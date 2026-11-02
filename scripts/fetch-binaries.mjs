@@ -80,7 +80,17 @@ async function main() {
       continue;
     }
     let from = null;
-    try {
+  // DOWNLOADANY_FFMPEG=system 强制用系统 ffmpeg（更新，但动态链接，仅本机可用不可分发）
+  if (label === "ffmpeg" && process.env.DOWNLOADANY_FFMPEG === "system") {
+    from = copyFromPath(label, target);
+    if (from) {
+      console.warn("[fetch-binaries] ⚠ system ffmpeg 为动态链接，产出的安装包在其他机器上不可用");
+      chmodSync(target, 0o755);
+      sums[`${label}-${TRIPLE}${EXE}`] = sha256File(target);
+      continue;
+    }
+  }
+  try {
       from = await fetcher(target);
     } catch (e) {
       console.warn(`[fetch-binaries] ${label}: 获取失败（${e.message}），尝试系统 PATH 回退`);
@@ -139,7 +149,9 @@ function copyFromPath(label, target) {
     copyFileSync(found, target);
     chmodSync(target, 0o755);
     // 回退来的"二进制"必须真的能跑（Homebrew 的 yt-dlp 是带 shebang 的 python shim）
-    execSync(`"${target}" --version`, { encoding: "utf8" });
+    // 注意 ffmpeg 只认单横线 -version，yt-dlp 用 --version
+    const vflag = label === "ffmpeg" ? "-version" : "--version";
+    execSync(`"${target}" ${vflag}`, { encoding: "utf8", stdio: "pipe" });
     console.warn(`[fetch-binaries] ⚠ ${label}: 使用系统版本 ${found}（本机可用，分发不保证）`);
     return `PATH 回退: ${found}`;
   } catch {
