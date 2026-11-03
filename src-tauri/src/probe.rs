@@ -139,5 +139,28 @@ fn collapse_formats(json: &Value, valid_ids: &mut HashSet<String>) -> Vec<Format
         filesize: None,
     });
 
+    // 附属内容：仅在元数据里真实存在时才提供
+    if json["thumbnail"].as_str().is_some_and(|s| !s.is_empty()) {
+        out.push(FormatOption {
+            id: crate::args::FMT_THUMBNAIL.into(),
+            label: "封面图片".into(),
+            height: None,
+            ext: None,
+            filesize: None,
+        });
+    }
+    let has_subs = ["subtitles", "automatic_captions"]
+        .iter()
+        .any(|k| json[*k].as_object().is_some_and(|m| !m.is_empty()));
+    if has_subs {
+        out.push(FormatOption {
+            id: crate::args::FMT_SUBTITLES.into(),
+            label: "字幕（SRT）".into(),
+            height: None,
+            ext: Some("srt".into()),
+            filesize: None,
+        });
+    }
+
     out
 }

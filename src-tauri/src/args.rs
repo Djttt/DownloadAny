@@ -3,9 +3,11 @@
 use crate::error::AppError;
 use std::collections::HashSet;
 
-/// 用户可选的两个合成格式（哨兵值，不是 yt-dlp 原生 format id）
+/// 用户可选的合成格式（哨兵值，不是 yt-dlp 原生 format id）
 pub const FMT_BEST: &str = "__best__";
 pub const FMT_AUDIO_MP3: &str = "__audio_mp3__";
+pub const FMT_THUMBNAIL: &str = "__thumbnail__";
+pub const FMT_SUBTITLES: &str = "__subtitles__";
 
 /// 进度行前缀。yt-dlp 会剥掉模板里的 `download:` 段名，实际输出以下列前缀开头，
 /// 每行一条：PROGRESS|<百分比>|<已下载>|<总大小>|<预估总大小>|<速度>|<ETA>
@@ -35,7 +37,7 @@ pub fn validate_url(url: &str) -> Result<(), AppError> {
 /// - 哨兵值（最佳/仅音频）直接放行
 /// - 其余必须是本次 probe 结果里出现过的 id，且只含安全字符
 pub fn validate_format(raw: &str, probed_ids: &HashSet<String>) -> Result<(), AppError> {
-    if raw == FMT_BEST || raw == FMT_AUDIO_MP3 {
+    if matches!(raw, FMT_BEST | FMT_AUDIO_MP3 | FMT_THUMBNAIL | FMT_SUBTITLES) {
         return Ok(());
     }
     let safe = !raw.is_empty()
@@ -83,6 +85,25 @@ pub fn build_download_args(
             "--audio-quality".into(),
             "0".into(),
         ]),
+        // 封面：不下载视频，仅写缩略图
+        FMT_THUMBNAIL => args.extend(["--skip-download".into(), "--write-thumbnail".into()]),
+        // 字幕：人工 + 自动生成，统一转 SRT（依赖 FFmpeg）。
+        // 语言默认 zh/en 系：实测 all 会连带 180+ 种机译变体（ab-zh 等）触发 429 限流
+        FMT_SUBTITLES => args.extend([
+            "--skip-download".into(),
+            "--write-subs".into(),
+            "--write-auto-subs".into(),
+            "--sub-langs".into(),
+            // 显式列举而非 zh.* 通配：实测通配会命中机译变体（zh-Hans-zh 等）
+            // 触发 YouTube 429 限流；-*-zh 排除式又被 yt-dlp 拒绝（Wrong regex）
+            "zh,zh-Hans,zh-Hant,zh-CN,en,en-orig".into(),
+            // 间隔取轨避免 YouTube 429；单轨失败不中断，保证 convert 照常执行
+            "--sleep-subtitles".into(),
+            "1".into(),
+            "--ignore-errors".into(),
+            "--convert-subs".into(),
+            "srt".into(),
+        ]),
         id => args.extend(["-f".into(), id.into()]),
     }
     args.push(url.into());
@@ -122,5 +143,23 @@ mod tests {
         let args = build_download_args(FMT_AUDIO_MP3, "https://x", "/tmp/o", Some("/app/dir"));
         assert!(args.windows(2).any(|w| w[0] == "--ffmpeg-location"));
         assert!(args.contains(&"-x".to_string()));
+    }
+
+    #[test]
+    fn thumbnail_skips_video_download() {
+        let args = build_download_args(FMT_THUMBNAIL, "https://x", "/tmp/o", None);
+        assert!(args.contains(&"--skip-download".to_string()));
+        assert!(args.contains(&"--write-thumbnail".to_string()));
+        assert!(!args.iter().any(|a| a == "-f"), "封面不应带 -f");
+    }
+
+    #[test]
+    fn subtitles_fetch_all_and_convert() {
+        let args = build_download_args(FMT_SUBTITLES, "https://x", "/tmp/o", None);
+        for flag in ["--write-subs", "--write-auto-subs", "--convert-subs", "srt"] {
+            assert!(args.iter().any(|a| a == flag), "缺少 {flag}");
+        }
+        assert!(validate_format(FMT_SUBTITLES, &HashSet::new()).is_ok());
+        assert!(validate_format(FMT_THUMBNAIL, &HashSet::new()).is_ok());
     }
 }

@@ -417,10 +417,18 @@ fn finish(app: &AppHandle, state: &AppState, id: u64, status: JobStatus, error: 
 }
 
 /// 从日志行提取输出文件路径，用于"打开文件所在目录"
+/// 覆盖两种形态：视频下载 `[download] Destination: <path>`；
+/// 封面/字幕写入 `[info] Writing video thumbnail (...) to: <path>`
 fn extract_destination(line: &str) -> Option<String> {
-    let marker = "Destination: ";
-    let idx = line.find(marker)?;
-    Some(line[idx + marker.len()..].trim().to_string())
+    if let Some(idx) = line.find("Destination: ") {
+        return Some(line[idx + "Destination: ".len()..].trim().to_string());
+    }
+    if line.contains("Writing ") {
+        if let Some(idx) = line.find(" to: ") {
+            return Some(line[idx + " to: ".len()..].trim().to_string());
+        }
+    }
+    None
 }
 
 /// probe 的薄封装：探测并把 format_id 集合存入白名单缓存
