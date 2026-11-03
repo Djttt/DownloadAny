@@ -61,14 +61,17 @@ export function PlatformWall() {
   const lastMoveTime = useRef(0);
   const velocity = useRef({ x: 0, y: 0 });
   const autoOffset = useRef(0);
+  const glideOffset = useRef({ x: 0, y: 0 });
   const autoResumeAt = useRef(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [isGliding, setIsGliding] = useState(false);
 
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    el.scrollLeft = el.scrollWidth / 3;
-    el.scrollTop = el.scrollHeight / 3;
+    const { x, y } = loopSize(el);
+    el.scrollLeft = x;
+    el.scrollTop = y;
   }, []);
 
   useEffect(() => {
@@ -81,7 +84,7 @@ export function PlatformWall() {
     const tick = (now: number) => {
       const elapsed = Math.min(now - previous, 32);
       if (!dragging.current && !inertiaActive.current && now >= autoResumeAt.current) {
-        const period = el.scrollWidth / 3;
+        const period = loopSize(el).x;
         autoOffset.current -= elapsed * 0.012;
         if (autoOffset.current <= -period) autoOffset.current += period;
         rows.style.transform = `translate3d(${autoOffset.current}px, 0, 0)`;
@@ -99,7 +102,9 @@ export function PlatformWall() {
 
   function startDrag(event: PointerEvent<HTMLDivElement>) {
     cancelAnimationFrame(inertiaFrame.current);
+    if (inertiaActive.current) commitGlide(event.currentTarget);
     inertiaActive.current = false;
+    setIsGliding(false);
     autoResumeAt.current = Number.POSITIVE_INFINITY;
     dragging.current = true;
     setIsDragging(true);
@@ -122,6 +127,13 @@ export function PlatformWall() {
       x: velocity.current.x * 0.6 + (deltaX / elapsed) * 0.4,
       y: velocity.current.y * 0.6 + (deltaY / elapsed) * 0.4,
     };
+    const speed = Math.hypot(velocity.current.x, velocity.current.y);
+    const maxSpeed = 1.5;
+    if (speed > maxSpeed) {
+      const scale = maxSpeed / speed;
+      velocity.current.x *= scale;
+      velocity.current.y *= scale;
+    }
     lastPointer.current = { x: event.clientX, y: event.clientY };
     lastMoveTime.current = now;
     normalizePosition(el);
@@ -137,8 +149,7 @@ export function PlatformWall() {
   }
 
   function normalizePosition(el: HTMLDivElement) {
-    const periodX = el.scrollWidth / 3;
-    const periodY = el.scrollHeight / 3;
+    const { x: periodX, y: periodY } = loopSize(el);
     if (el.scrollLeft < periodX * 0.5) el.scrollLeft += periodX;
     if (el.scrollLeft > periodX * 1.5) el.scrollLeft -= periodX;
     if (el.scrollTop < periodY * 0.5) el.scrollTop += periodY;
@@ -147,25 +158,42 @@ export function PlatformWall() {
 
   function startInertia(el: HTMLDivElement) {
     if (Math.hypot(velocity.current.x, velocity.current.y) < 0.03) {
+      setIsGliding(false);
       autoResumeAt.current = performance.now() + 300;
       return;
     }
     inertiaActive.current = true;
+    setIsGliding(true);
+    glideOffset.current = { x: 0, y: 0 };
     let previous = performance.now();
 
     const glide = (now: number) => {
       const elapsed = Math.min(now - previous, 32);
       previous = now;
-      el.scrollLeft += velocity.current.x * elapsed;
-      el.scrollTop += velocity.current.y * elapsed;
-      normalizePosition(el);
+      const rows = rowsRef.current;
+      if (!rows) {
+        inertiaActive.current = false;
+        setIsGliding(false);
+        return;
+      }
+
+      glideOffset.current.x -= velocity.current.x * elapsed;
+      glideOffset.current.y -= velocity.current.y * elapsed;
+      const { x: periodX, y: periodY } = loopSize(el);
+      if (glideOffset.current.x <= -periodX) glideOffset.current.x += periodX;
+      if (glideOffset.current.x >= periodX) glideOffset.current.x -= periodX;
+      if (glideOffset.current.y <= -periodY) glideOffset.current.y += periodY;
+      if (glideOffset.current.y >= periodY) glideOffset.current.y -= periodY;
+      rows.style.transform = `translate3d(${autoOffset.current + glideOffset.current.x}px, ${glideOffset.current.y}px, 0)`;
 
       const damping = Math.pow(0.94, elapsed / 16.67);
       velocity.current.x *= damping;
       velocity.current.y *= damping;
 
       if (Math.hypot(velocity.current.x, velocity.current.y) < 0.015) {
+        commitGlide(el);
         inertiaActive.current = false;
+        setIsGliding(false);
         autoResumeAt.current = now + 300;
         return;
       }
@@ -173,6 +201,19 @@ export function PlatformWall() {
     };
 
     inertiaFrame.current = requestAnimationFrame(glide);
+  }
+
+  function commitGlide(el: HTMLDivElement) {
+    const periodX = loopSize(el).x;
+    autoOffset.current += glideOffset.current.x;
+    while (autoOffset.current > 0) autoOffset.current -= periodX;
+    while (autoOffset.current <= -periodX) autoOffset.current += periodX;
+    el.scrollTop -= glideOffset.current.y;
+    normalizePosition(el);
+    glideOffset.current = { x: 0, y: 0 };
+    if (rowsRef.current) {
+      rowsRef.current.style.transform = `translate3d(${autoOffset.current}px, 0, 0)`;
+    }
   }
 
   return (
@@ -184,7 +225,7 @@ export function PlatformWall() {
       <div className="platform-fade-frame">
         <div
           ref={scroller}
-          className={`platform-scroll${isDragging ? " dragging" : ""}`}
+          className={`platform-scroll${isDragging ? " dragging" : ""}${isGliding ? " gliding" : ""}`}
           onPointerDown={startDrag}
           onPointerMove={moveDrag}
           onPointerUp={stopDrag}
@@ -194,7 +235,10 @@ export function PlatformWall() {
             {[0, 1, 2].map((cycle) => (
               <div className="platform-cycle" key={cycle}>
                 {[0, 4, 8, 12, 16, 20].map((offset, rowIndex) => {
-                  const row = [...platforms.slice(offset), ...platforms.slice(0, offset)];
+                  const row = Array.from(
+                    { length: 8 },
+                    (_, index) => platforms[(offset + index) % platforms.length],
+                  );
                   return (
                     <div className="platform-track" key={offset}>
                       {[0, 1, 2].map((copy) => (
@@ -205,7 +249,13 @@ export function PlatformWall() {
                               key={`${cycle}-${rowIndex}-${copy}-${platform.name}`}
                             >
                               <span className="platform-logo">
-                                <img src={platform.logo} alt="" draggable={false} />
+                                <img
+                                  src={platform.logo}
+                                  alt=""
+                                  draggable={false}
+                                  loading="eager"
+                                  decoding="sync"
+                                />
                               </span>
                               <span>{platform.name}</span>
                             </div>
@@ -226,4 +276,13 @@ export function PlatformWall() {
       </div>
     </div>
   );
+}
+
+function loopSize(el: HTMLDivElement) {
+  const segment = el.querySelector<HTMLElement>(".platform-segment");
+  const cycle = el.querySelector<HTMLElement>(".platform-cycle");
+  return {
+    x: segment?.offsetWidth || el.scrollWidth / 3,
+    y: cycle?.offsetHeight || el.scrollHeight / 3,
+  };
 }

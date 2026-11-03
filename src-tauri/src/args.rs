@@ -85,6 +85,13 @@ pub fn build_download_args(
     output_dir: &str,
     ffmpeg_location: Option<&str>,
 ) -> Vec<String> {
+    let output_template = if cfg!(windows) {
+        // Windows 临时分片还会追加格式号、分片号等后缀；限制标题长度避免
+        // 超过 Win32 路径/文件名限制后抛出 `[Errno 22] Invalid argument`。
+        "%(title).120B [%(id)s].%(ext)s"
+    } else {
+        "%(title)s [%(id)s].%(ext)s"
+    };
     let mut args: Vec<String> = vec![
         "--no-playlist".into(),
         "--newline".into(),
@@ -94,8 +101,11 @@ pub fn build_download_args(
         "--paths".into(),
         output_dir.into(),
         "-o".into(),
-        "%(title)s [%(id)s].%(ext)s".into(),
+        output_template.into(),
     ];
+    if cfg!(windows) {
+        args.push("--windows-filenames".into());
+    }
     if let Some(loc) = ffmpeg_location {
         args.push("--ffmpeg-location".into());
         args.push(loc.into());
@@ -194,6 +204,14 @@ mod tests {
             w[0] == "-f" && w[1] == "bv*[height<=1080]+ba/b[height<=1080]/b"
         }));
         assert!(validate_format("__video_99999p__", &HashSet::new()).is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_uses_safe_bounded_filenames() {
+        let args = build_download_args(FMT_BEST, "https://x", "C:\\Downloads", None);
+        assert!(args.contains(&"--windows-filenames".to_string()));
+        assert!(args.contains(&"%(title).120B [%(id)s].%(ext)s".to_string()));
     }
 
     #[test]

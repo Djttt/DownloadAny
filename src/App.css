@@ -452,6 +452,7 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   will-change: transform;
+  backface-visibility: hidden;
 }
 
 .platform-cycle {
@@ -497,6 +498,12 @@ select:focus-visible {
 .platform-card:hover {
   border-color: #d8dbee;
   box-shadow: 0 6px 16px rgba(35, 42, 70, 0.08);
+}
+
+.platform-scroll.dragging .platform-card,
+.platform-scroll.gliding .platform-card {
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(35, 42, 70, 0.035);
 }
 
 .platform-card > span:last-child {

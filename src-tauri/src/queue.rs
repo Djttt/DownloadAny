@@ -251,15 +251,20 @@ async fn forward_lines<R: tokio::io::AsyncRead + Unpin>(
     reader: R,
     tx: mpsc::UnboundedSender<String>,
 ) {
-    let mut lines = BufReader::new(reader).lines();
+    let mut reader = BufReader::new(reader);
+    let mut bytes = Vec::new();
     loop {
-        match lines.next_line().await {
-            Ok(Some(line)) => {
+        bytes.clear();
+        match reader.read_until(b'\n', &mut bytes).await {
+            Ok(0) => break,
+            Ok(_) => {
+                let line = String::from_utf8_lossy(&bytes)
+                    .trim_end_matches(['\r', '\n'])
+                    .to_string();
                 if !line.trim().is_empty() && tx.send(line).is_err() {
                     break;
                 }
             }
-            Ok(None) => break,
             Err(_) => break,
         }
     }
@@ -292,6 +297,10 @@ async fn run_job(app: AppHandle, state: AppState, id: u64, opts: DownloadOptions
 
     let mut cmd = yt_dlp.command();
     cmd.args(&cmd_args)
+        // Windows 的无控制台子进程可能按本地代码页输出；强制 UTF-8，避免
+        // 中文标题或错误信息导致日志读取提前终止。
+        .env("PYTHONIOENCODING", "utf-8")
+        .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);

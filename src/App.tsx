@@ -243,21 +243,28 @@ function App() {
       </aside>
 
       <main className="main">
-        <header className="head">
-          <h1>视频 / 音频下载器</h1>
-          <label className="auto">
-            <input
-              type="checkbox"
-              checked={autoMode}
-              onChange={(e) => toggleAuto(e.target.checked)}
-              aria-label="自动下载"
-            />
-            <span className="sw" aria-hidden />
-            自动下载
-          </label>
-        </header>
-
-        <UrlBar busy={busy} autoMode={autoMode} error={error} onSubmit={handleStart} />
+        {view === "download" ? (
+          <>
+            <header className="head">
+              <h1>视频 / 音频下载器</h1>
+              <label className="auto">
+                <input
+                  type="checkbox"
+                  checked={autoMode}
+                  onChange={(e) => toggleAuto(e.target.checked)}
+                  aria-label="自动下载"
+                />
+                <span className="sw" aria-hidden />
+                自动下载
+              </label>
+            </header>
+            <UrlBar busy={busy} autoMode={autoMode} error={error} onSubmit={handleStart} />
+          </>
+        ) : (
+          <header className="head history-head">
+            <h1>历史记录</h1>
+          </header>
+        )}
 
         {video && view === "download" && (
           <FormatBar
@@ -270,7 +277,7 @@ function App() {
           />
         )}
 
-        {all.length > 0 && (view === "history" || !video) && (
+        {all.length > 0 && view === "history" && (
           <div className="stats">
             {all.length} 项
             {running > 0 && <em> · {running} 下载中</em>}
@@ -278,10 +285,8 @@ function App() {
           </div>
         )}
 
-        {view === "download" && !video && all.length === 0 ? (
-          <PlatformWall />
-        ) : view === "download" && video ? (
-          <div className="result-spacer" />
+        {view === "download" ? (
+          video ? <div className="result-spacer" /> : <PlatformWall />
         ) : (
           <section className="list" aria-label={view === "history" ? "历史任务" : "下载队列"}>
             <QueueList jobs={visible} logs={logs} onCancel={cancel} onRetry={handleRetry} />
