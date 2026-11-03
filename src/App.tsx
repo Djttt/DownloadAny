@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { DependencyInfo, FormatOption, JobRecord, VideoInfo } from "./types";
+import type { FormatOption, JobRecord, VideoInfo } from "./types";
 import {
   cancelDownload,
-  dependencyInfo,
   enqueueDownload,
   listJobs,
   onJobProgress,
@@ -16,6 +15,7 @@ import { loadAutoMode, loadOutputDir, saveAutoMode, saveOutputDir } from "./lib/
 import { UrlBar } from "./components/UrlBar";
 import { FormatBar } from "./components/VideoCard";
 import { QueueList } from "./components/QueueList";
+import { PlatformWall } from "./components/PlatformWall";
 import "./App.css";
 
 const LOG_CAP = 500;
@@ -31,7 +31,6 @@ function App() {
   const [jobs, setJobs] = useState<Record<number, JobRecord>>({});
   const [logs, setLogs] = useState<Record<number, string[]>>({});
   const [outputDir, setOutputDir] = useState("");
-  const [deps, setDeps] = useState<DependencyInfo | null>(null);
   const [autoMode, setAutoMode] = useState(false);
   const [view, setView] = useState<View>("download");
 
@@ -43,7 +42,6 @@ function App() {
         const [dir, auto] = await Promise.all([loadOutputDir(), loadAutoMode()]);
         setOutputDir(dir);
         setAutoMode(auto);
-        setDeps(await dependencyInfo());
       } catch (e) {
         console.error(e);
       }
@@ -121,7 +119,11 @@ function App() {
     }
   }
 
-  async function enqueue(format: FormatOption, url = currentUrl, title?: string) {
+  async function enqueue(
+    format: FormatOption,
+    url = currentUrl,
+    title?: string,
+  ): Promise<number | undefined> {
     if (!outputDir) return;
     try {
       const id = await enqueueDownload({
@@ -137,8 +139,8 @@ function App() {
         formatId: format.id,
         formatLabel: format.label,
       });
-      setVideo(null);
       setView("download");
+      return id;
     } catch (e) {
       setError(String(e));
     }
@@ -205,11 +207,39 @@ function App() {
             <span>历史</span>
           </button>
         </nav>
-        <div className="side-foot" title={deps?.ytDlpPath}>
-          {deps
-            ? `yt-dlp ${deps.ytDlpVersion ?? "未找到"} · FFmpeg ${deps.ffmpegVersion ?? "未找到"}`
-            : "检测依赖中…"}
-        </div>
+        <button
+          className="account-entry"
+          type="button"
+          title="登录功能待接入"
+          aria-label="登录账户"
+        >
+          <span className="account-avatar" aria-hidden>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+              <circle cx="12" cy="8.5" r="3.5" fill="currentColor" />
+              <path d="M5.5 19c.5-3.2 2.7-5 6.5-5s6 1.8 6.5 5" fill="currentColor" />
+            </svg>
+          </span>
+          <span className="account-copy">
+            <strong>未登录</strong>
+            <small>点击登录</small>
+          </span>
+          <svg
+            className="account-arrow"
+            viewBox="0 0 16 16"
+            width="14"
+            height="14"
+            fill="none"
+            aria-hidden
+          >
+            <path
+              d="m6 3.5 4.5 4.5L6 12.5"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
       </aside>
 
       <main className="main">
@@ -229,16 +259,18 @@ function App() {
 
         <UrlBar busy={busy} autoMode={autoMode} error={error} onSubmit={handleStart} />
 
-        {video && (
+        {video && view === "download" && (
           <FormatBar
             video={video}
             busy={false}
+            jobs={jobs}
             onDownload={(f) => enqueue(f)}
+            onCancel={cancel}
             onDiscard={() => setVideo(null)}
           />
         )}
 
-        {all.length > 0 && (
+        {all.length > 0 && (view === "history" || !video) && (
           <div className="stats">
             {all.length} 项
             {running > 0 && <em> · {running} 下载中</em>}
@@ -246,9 +278,15 @@ function App() {
           </div>
         )}
 
-        <section className="list" aria-label={view === "history" ? "历史任务" : "下载队列"}>
-          <QueueList jobs={visible} logs={logs} onCancel={cancel} onRetry={handleRetry} />
-        </section>
+        {view === "download" && !video && all.length === 0 ? (
+          <PlatformWall />
+        ) : view === "download" && video ? (
+          <div className="result-spacer" />
+        ) : (
+          <section className="list" aria-label={view === "history" ? "历史任务" : "下载队列"}>
+            <QueueList jobs={visible} logs={logs} onCancel={cancel} onRetry={handleRetry} />
+          </section>
+        )}
 
         <footer className="savebar">
           <span className="lab">保存到</span>

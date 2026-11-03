@@ -65,8 +65,8 @@ pub async fn probe(url: &str) -> Result<ProbeResult, AppError> {
         return Err(AppError::PlaylistUnsupported);
     }
 
-    let mut valid_ids = HashSet::new();
-    let formats = collapse_formats(&json, &mut valid_ids);
+    let valid_ids = HashSet::new();
+    let formats = collapse_formats(&json);
 
     let info = VideoInfo {
         id: json["id"].as_str().unwrap_or("").to_string(),
@@ -82,7 +82,7 @@ pub async fn probe(url: &str) -> Result<ProbeResult, AppError> {
 
 /// 把 yt-dlp 原始格式列表折叠成人能读懂的选项：
 /// 最佳画质+音频（合并） / 各档单文件渐进格式 / 仅音频（MP3 提取）
-fn collapse_formats(json: &Value, valid_ids: &mut HashSet<String>) -> Vec<FormatOption> {
+fn collapse_formats(json: &Value) -> Vec<FormatOption> {
     let mut out = Vec::new();
 
     out.push(FormatOption {
@@ -93,41 +93,51 @@ fn collapse_formats(json: &Value, valid_ids: &mut HashSet<String>) -> Vec<Format
         filesize: json["filesize_approx"].as_f64().map(|v| v as u64),
     });
 
-    // 渐进式（单文件包含视频+音频），按 (height, ext) 取码率最高的一条
-    // (height, ext, format_id, filesize, tbr)
-    let mut progressive: Vec<(u32, String, String, u64, u64)> = Vec::new();
+    // 从所有视频流提取实际分辨率。现代站点通常采用 DASH/HLS 分离流，
+    // 因此不能只看同时包含音视频的渐进式格式。
+    let mut resolutions = std::collections::BTreeMap::<u32, u64>::new();
+    let best_audio_filesize = json["formats"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|f| {
+            f["vcodec"].as_str().unwrap_or("none") == "none"
+                && f["acodec"].as_str().unwrap_or("none") != "none"
+        })
+        .filter_map(|f| {
+            f["filesize"]
+                .as_f64()
+                .or(f["filesize_approx"].as_f64())
+                .map(|v| v as u64)
+        })
+        .max()
+        .unwrap_or(0);
     for f in json["formats"].as_array().into_iter().flatten() {
         let vcodec = f["vcodec"].as_str().unwrap_or("none");
-        let acodec = f["acodec"].as_str().unwrap_or("none");
-        if vcodec == "none" || acodec == "none" {
+        if vcodec == "none" {
             continue;
         }
-        let Some(id) = f["format_id"].as_str() else { continue };
         let height = f["height"].as_u64().unwrap_or(0) as u32;
-        let ext = f["ext"].as_str().unwrap_or("?").to_string();
+        if height == 0 {
+            continue;
+        }
         let filesize = f["filesize"]
             .as_f64()
             .or(f["filesize_approx"].as_f64())
             .map(|v| v as u64)
             .unwrap_or(0);
-        let tbr = f["tbr"].as_f64().unwrap_or(0.0) as u64;
-        valid_ids.insert(id.to_string());
-        if let Some(existing) = progressive.iter_mut().find(|p| p.0 == height && p.1 == ext) {
-            if tbr > existing.4 {
-                *existing = (height, ext.clone(), id.to_string(), filesize, tbr);
-            }
-        } else {
-            progressive.push((height, ext, id.to_string(), filesize, tbr));
-        }
+        resolutions
+            .entry(height)
+            .and_modify(|size| *size = (*size).max(filesize))
+            .or_insert(filesize);
     }
-    progressive.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| b.4.cmp(&a.4)));
-    for (height, ext, format_id, filesize, _) in progressive.into_iter().take(8) {
+    for (height, filesize) in resolutions.into_iter().rev().take(8) {
         out.push(FormatOption {
-            id: format_id, // 真实 format_id，入队时经 valid_ids 白名单校验
-            label: format!("{}p · {}（单文件）", height, ext),
-            height: (height > 0).then_some(height),
-            ext: Some(ext),
-            filesize: (filesize > 0).then_some(filesize),
+            id: format!("__video_{}p__", height),
+            label: format!("{}p", height),
+            height: Some(height),
+            ext: None,
+            filesize: (filesize > 0).then_some(filesize.saturating_add(best_audio_filesize)),
         });
     }
 
