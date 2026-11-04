@@ -13,9 +13,9 @@
     "windows": [
       {
         "title": "DownloadAny",
-        "width": 960,
+        "width": 1100,
         "height": 680,
-        "minWidth": 720,
+        "minWidth": 1045,
         "minHeight": 480
       }
     ],

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { FormatOption, JobRecord, VideoInfo } from "./types";
 import {
@@ -22,16 +22,20 @@ const LOG_CAP = 500;
 const TERMINAL: JobRecord["status"][] = ["completed", "failed", "cancelled"];
 
 type View = "download" | "history";
+type ParsedVideo = { key: string; order: number; url: string; info: VideoInfo };
 
 function App() {
-  const [video, setVideo] = useState<VideoInfo | null>(null);
-  const [currentUrl, setCurrentUrl] = useState("");
+  const [videos, setVideos] = useState<ParsedVideo[]>([]);
+  const [urlInput, setUrlInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobs, setJobs] = useState<Record<number, JobRecord>>({});
   const [logs, setLogs] = useState<Record<number, string[]>>({});
   const [outputDir, setOutputDir] = useState("");
   const [autoMode, setAutoMode] = useState(false);
+  const [autoJobIds, setAutoJobIds] = useState<number[]>([]);
+  const [autoCancelling, setAutoCancelling] = useState(false);
+  const autoCancelRequested = useRef(false);
   const [view, setView] = useState<View>("download");
 
   useEffect(() => {
@@ -100,20 +104,46 @@ function App() {
   }
 
   /** 探测；自动模式下直接以首个格式（最佳画质+音频）入队 */
-  async function handleStart(url: string) {
+  async function handleStart(urls: string[]) {
     setBusy(true);
     setError(null);
-    setVideo(null);
-    setCurrentUrl(url);
+    setVideos([]);
+    setAutoJobIds([]);
+    setAutoCancelling(false);
+    autoCancelRequested.current = false;
+    const failures: string[] = [];
     try {
-      const info = await probeVideo(url);
-      if (autoMode && info.formats[0]) {
-        await enqueue(info.formats[0], url, info.title);
-      } else {
-        setVideo(info);
+      // 控制并发数，批量链接较多时避免同时启动过多 yt-dlp 进程。
+      const pending = [...urls];
+      const workers = Array.from({ length: Math.min(3, pending.length) }, async () => {
+        while (pending.length) {
+          const url = pending.shift();
+          if (!url) break;
+          try {
+            const info = await probeVideo(url);
+            if (autoMode && info.formats[0]) {
+              if (autoCancelRequested.current) continue;
+              const id = await enqueue(info.formats[0], url, info.title);
+              if (id != null) {
+                if (autoCancelRequested.current) {
+                  cancelDownload(id).catch(() => {});
+                } else {
+                  setAutoJobIds((current) => [...current, id]);
+                }
+              }
+            } else {
+              const item = { key: `${url}-${info.id}`, order: urls.indexOf(url), url, info };
+              setVideos((current) => [...current, item].sort((a, b) => a.order - b.order));
+            }
+          } catch (e) {
+            failures.push(`${url}\n${String(e)}`);
+          }
+        }
+      });
+      await Promise.all(workers);
+      if (failures.length) {
+        setError(`${failures.length} 个链接解析失败：\n${failures.join("\n\n")}`);
       }
-    } catch (e) {
-      setError(String(e));
     } finally {
       setBusy(false);
     }
@@ -121,7 +151,7 @@ function App() {
 
   async function enqueue(
     format: FormatOption,
-    url = currentUrl,
+    url: string,
     title?: string,
   ): Promise<number | undefined> {
     if (!outputDir) return;
@@ -130,12 +160,12 @@ function App() {
         url,
         formatId: format.id,
         outputDir,
-        title: title ?? video?.title,
+        title,
         formatLabel: format.label,
       });
       upsert(id, {
         url,
-        title: title ?? video?.title ?? `任务 #${id}`,
+        title: title ?? `任务 #${id}`,
         formatId: format.id,
         formatLabel: format.label,
       });
@@ -165,10 +195,50 @@ function App() {
     saveAutoMode(v).catch(console.error);
   }
 
+  async function cancelAutoDownload() {
+    autoCancelRequested.current = true;
+    setAutoCancelling(true);
+    const activeIds = autoJobIds.filter((id) => {
+      const status = jobs[id]?.status;
+      return status === "queued" || status === "running";
+    });
+    await Promise.all(activeIds.map((id) => cancelDownload(id).catch(() => {})));
+    setAutoCancelling(false);
+  }
+
+  function showNavRipple(event: MouseEvent<HTMLButtonElement>) {
+    const button = event.currentTarget;
+    const rect = button.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height) * 1.8;
+    const ripple = document.createElement("span");
+    ripple.className = "nav-ripple";
+    ripple.style.width = `${size}px`;
+    ripple.style.height = `${size}px`;
+    ripple.style.left = `${event.clientX - rect.left - size / 2}px`;
+    ripple.style.top = `${event.clientY - rect.top - size / 2}px`;
+    button.appendChild(ripple);
+
+    const remove = () => ripple.remove();
+    ripple.addEventListener("animationend", remove, { once: true });
+    window.setTimeout(remove, 650);
+  }
+
   const all = Object.values(jobs).sort((a, b) => b.id - a.id);
   const visible = view === "history" ? all.filter((j) => TERMINAL.includes(j.status)) : all;
   const running = all.filter((j) => j.status === "running").length;
   const done = all.filter((j) => j.status === "completed").length;
+  const autoJobs = autoJobIds.map((id) => jobs[id]).filter((job): job is JobRecord => Boolean(job));
+  const autoDownloadActive = autoJobs.some(
+    (job) => job.status === "queued" || job.status === "running",
+  );
+  const autoDownloadProgress =
+    autoJobIds.length > 0 && (busy || autoDownloadActive)
+      ? autoJobIds.reduce((total, id) => {
+          const job = jobs[id];
+          if (job?.status === "completed") return total + 100;
+          return total + Math.min(100, Math.max(0, job?.percent ?? 0));
+        }, 0) / autoJobIds.length
+      : null;
 
   return (
     <div className="shell">
@@ -186,7 +256,13 @@ function App() {
           <span className="word">DownloadAny</span>
         </div>
         <nav aria-label="主导航">
-          <button className={view === "download" ? "nav on" : "nav"} onClick={() => setView("download")}>
+          <button
+            className={view === "download" ? "nav on" : "nav"}
+            onClick={(event) => {
+              showNavRipple(event);
+              setView("download");
+            }}
+          >
             <svg viewBox="0 0 16 16" width="15" height="15" fill="none">
               <path
                 d="M8 2.5v7m0 0L5.2 6.7M8 9.5l2.8-2.8M3 12.5h10"
@@ -199,7 +275,13 @@ function App() {
             <span>下载</span>
             {running > 0 && <span className="count">{running}</span>}
           </button>
-          <button className={view === "history" ? "nav on" : "nav"} onClick={() => setView("history")}>
+          <button
+            className={view === "history" ? "nav on" : "nav"}
+            onClick={(event) => {
+              showNavRipple(event);
+              setView("history");
+            }}
+          >
             <svg viewBox="0 0 16 16" width="15" height="15" fill="none">
               <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.5" />
               <path d="M8 5v3.2l2.2 1.6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -247,10 +329,11 @@ function App() {
           <>
             <header className="head">
               <h1>视频 / 音频下载器</h1>
-              <label className="auto">
+              <label className={`auto${busy || autoDownloadActive ? " disabled" : ""}`}>
                 <input
                   type="checkbox"
                   checked={autoMode}
+                  disabled={busy || autoDownloadActive}
                   onChange={(e) => toggleAuto(e.target.checked)}
                   aria-label="自动下载"
                 />
@@ -258,23 +341,22 @@ function App() {
                 自动下载
               </label>
             </header>
-            <UrlBar busy={busy} autoMode={autoMode} error={error} onSubmit={handleStart} />
+            <UrlBar
+              value={urlInput}
+              busy={busy || autoDownloadActive}
+              autoMode={autoMode}
+              downloadProgress={autoMode ? autoDownloadProgress : null}
+              cancelling={autoCancelling}
+              error={error}
+              onValueChange={setUrlInput}
+              onSubmit={handleStart}
+              onCancelDownload={cancelAutoDownload}
+            />
           </>
         ) : (
           <header className="head history-head">
             <h1>历史记录</h1>
           </header>
-        )}
-
-        {video && view === "download" && (
-          <FormatBar
-            video={video}
-            busy={false}
-            jobs={jobs}
-            onDownload={(f) => enqueue(f)}
-            onCancel={cancel}
-            onDiscard={() => setVideo(null)}
-          />
         )}
 
         {all.length > 0 && view === "history" && (
@@ -286,10 +368,25 @@ function App() {
         )}
 
         {view === "download" ? (
-          video ? <div className="result-spacer" /> : <PlatformWall />
+          videos.length ? (
+            <section className="format-results" aria-label="解析结果">
+              {videos.map((item) => (
+                <FormatBar
+                  key={item.key}
+                  video={item.info}
+                  busy={false}
+                  outputDir={outputDir}
+                  jobs={jobs}
+                  onDownload={(format) => enqueue(format, item.url, item.info.title)}
+                  onCancel={cancel}
+                  onDiscard={() => setVideos((current) => current.filter((video) => video.key !== item.key))}
+                />
+              ))}
+            </section>
+          ) : <PlatformWall />
         ) : (
           <section className="list" aria-label={view === "history" ? "历史任务" : "下载队列"}>
-            <QueueList jobs={visible} logs={logs} onCancel={cancel} onRetry={handleRetry} />
+            <QueueList jobs={visible} logs={logs} outputDir={outputDir} onCancel={cancel} onRetry={handleRetry} />
           </section>
         )}
 

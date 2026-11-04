@@ -24,6 +24,9 @@ export const cancelDownload = (jobId: number) =>
 
 export const listJobs = () => invoke<JobRecord[]>("list_jobs");
 
+export const openDownloadLocation = (filePath: string, fallbackDir: string) =>
+  invoke<void>("open_download_location", { filePath, fallbackDir });
+
 export const dependencyInfo = () => invoke<DependencyInfo>("dependency_info");
 
 // ---- events ----

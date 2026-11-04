@@ -6,6 +6,7 @@ use crate::probe::VideoInfo;
 use crate::queue::{self, AppState, DownloadOptions, JobRecord};
 use crate::resolve;
 use serde::Serialize;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, State};
 
 #[tauri::command]
@@ -32,6 +33,40 @@ pub fn cancel_download(state: State<'_, AppState>, job_id: u64) -> Result<(), Ap
 #[tauri::command]
 pub fn list_jobs(state: State<'_, AppState>) -> Result<Vec<JobRecord>, AppError> {
     Ok(state.list())
+}
+
+#[tauri::command]
+pub fn open_download_location(file_path: String, fallback_dir: String) -> Result<(), AppError> {
+    let file = PathBuf::from(file_path);
+    let fallback = PathBuf::from(fallback_dir);
+    let target_dir = if fallback.is_dir() {
+        fallback.as_path()
+    } else if file.is_dir() {
+        file.as_path()
+    } else {
+        file.parent().unwrap_or(Path::new("."))
+    };
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer.exe")
+            .arg(target_dir)
+            .spawn()?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open").arg(target_dir).spawn()?;
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(target_dir)
+            .spawn()?;
+    }
+
+    Ok(())
 }
 
 #[derive(Serialize, Clone)]

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormatOption, JobRecord, VideoInfo } from "../types";
 import { fmtBytes, fmtDuration, fmtSpeed } from "../lib/format";
+import { openDownloadLocation } from "../lib/tauri";
 
 const AUDIO_FORMATS: FormatOption[] = [
   { id: "__audio_mp3__", label: "MP3" },
@@ -19,6 +20,7 @@ const SUBTITLE_FORMAT: FormatOption = { id: "__subtitles__", label: "SRT" };
 interface Props {
   video: VideoInfo;
   busy: boolean;
+  outputDir: string;
   jobs: Record<number, JobRecord>;
   onDownload: (format: FormatOption) => Promise<number | undefined>;
   onCancel: (id: number) => void;
@@ -27,7 +29,7 @@ interface Props {
 
 type RowKind = "video" | "audio" | "image" | "subtitle";
 
-export function FormatBar({ video, busy, jobs, onDownload, onCancel, onDiscard }: Props) {
+export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, onDiscard }: Props) {
   const videoFormats = useMemo(
     () =>
       video.formats.filter(
@@ -72,6 +74,7 @@ export function FormatBar({ video, busy, jobs, onDownload, onCancel, onDiscard }
           value={selected.video}
           job={rowJobs.video == null ? undefined : jobs[rowJobs.video]}
           busy={busy}
+          outputDir={outputDir}
           showSelectedSize
           onChange={(value) => setSelected((current) => ({ ...current, video: value }))}
           onDownload={() => start("video", videoFormats)}
@@ -84,6 +87,7 @@ export function FormatBar({ video, busy, jobs, onDownload, onCancel, onDiscard }
           value={selected.subtitle}
           job={rowJobs.subtitle == null ? undefined : jobs[rowJobs.subtitle]}
           busy={busy}
+          outputDir={outputDir}
           onChange={(value) => setSelected((current) => ({ ...current, subtitle: value }))}
           onDownload={() => start("subtitle", subtitleFormats)}
           onCancel={onCancel}
@@ -95,6 +99,7 @@ export function FormatBar({ video, busy, jobs, onDownload, onCancel, onDiscard }
           value={selected.audio}
           job={rowJobs.audio == null ? undefined : jobs[rowJobs.audio]}
           busy={busy}
+          outputDir={outputDir}
           onChange={(value) => setSelected((current) => ({ ...current, audio: value }))}
           onDownload={() => start("audio", AUDIO_FORMATS)}
           onCancel={onCancel}
@@ -106,6 +111,7 @@ export function FormatBar({ video, busy, jobs, onDownload, onCancel, onDiscard }
           value={selected.image}
           job={rowJobs.image == null ? undefined : jobs[rowJobs.image]}
           busy={busy || !video.thumbnail}
+          outputDir={outputDir}
           onChange={(value) => setSelected((current) => ({ ...current, image: value }))}
           onDownload={() => start("image", IMAGE_FORMATS)}
           onCancel={onCancel}
@@ -128,6 +134,7 @@ function DownloadRow({
   value,
   job,
   busy,
+  outputDir,
   onChange,
   onDownload,
   onCancel,
@@ -139,6 +146,7 @@ function DownloadRow({
   value: string;
   job?: JobRecord;
   busy: boolean;
+  outputDir: string;
   onChange: (value: string) => void;
   onDownload: () => void;
   onCancel: (id: number) => void;
@@ -146,9 +154,7 @@ function DownloadRow({
 }) {
   const active = job?.status === "queued" || job?.status === "running";
   const status =
-    job?.status === "completed"
-      ? "已完成"
-      : job?.status === "failed"
+    job?.status === "failed"
         ? "失败"
         : job?.status === "cancelled"
           ? "已取消"
@@ -190,9 +196,37 @@ function DownloadRow({
           </div>
           <div className="inline-download">
             {status && <em className={job?.status}>{status}</em>}
-            <button className="row-download" disabled={busy || options.length === 0} onClick={onDownload}>
-              {job?.status === "failed" ? "重试" : job?.status === "completed" ? "再次下载" : "下载"}
-            </button>
+            {job?.status === "completed" ? (
+              <button
+                type="button"
+                className="row-download folder-open"
+                disabled={!outputDir && !job.outputPath}
+                aria-label="打开文件所在文件夹"
+                title="打开文件所在文件夹"
+                onClick={() => {
+                  openDownloadLocation(job.outputPath ?? "", outputDir).catch(console.error);
+                }}
+              >
+                <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden>
+                  <path
+                    d="M2.75 6.25V5.4c0-1.05.85-1.9 1.9-1.9H7.3l1.65 1.85h6.4c1.05 0 1.9.85 1.9 1.9v6.35c0 1.05-.85 1.9-1.9 1.9H4.65a1.9 1.9 0 0 1-1.9-1.9V6.25Zm0 0h14.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            ) : (
+              <button
+                className="row-download"
+                disabled={busy || options.length === 0}
+                onClick={onDownload}
+              >
+                {job?.status === "failed" ? "重试" : "下载"}
+              </button>
+            )}
           </div>
         </>
       )}

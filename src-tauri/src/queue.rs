@@ -429,6 +429,9 @@ fn finish(app: &AppHandle, state: &AppState, id: u64, status: JobStatus, error: 
 /// 覆盖两种形态：视频下载 `[download] Destination: <path>`；
 /// 封面/字幕写入 `[info] Writing video thumbnail (...) to: <path>`
 fn extract_destination(line: &str) -> Option<String> {
+    if let Some(path) = line.strip_prefix("FINAL_PATH|") {
+        return Some(path.trim().to_string());
+    }
     if let Some(idx) = line.find("Destination: ") {
         return Some(line[idx + "Destination: ".len()..].trim().to_string());
     }

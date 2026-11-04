@@ -24,6 +24,7 @@ pub fn run() {
             commands::enqueue_download,
             commands::cancel_download,
             commands::list_jobs,
+            commands::open_download_location,
             commands::dependency_info
         ])
         .run(tauri::generate_context!())

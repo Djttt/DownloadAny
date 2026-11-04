@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { JobRecord } from "../types";
 import { fmtBytes, fmtEta, fmtSpeed } from "../lib/format";
+import { openDownloadLocation } from "../lib/tauri";
 
 const STATUS_TEXT = {
   queued: "排队中",
@@ -14,12 +14,13 @@ const STATUS_TEXT = {
 interface Props {
   jobs: JobRecord[];
   logs: Record<number, string[]>;
+  outputDir: string;
   onCancel: (id: number) => void;
   onRetry: (job: JobRecord) => void;
 }
 
 /** 队列列表：# / 标题+状态子行 / 类型 / 进度 / 动作（参考图的表式布局） */
-export function QueueList({ jobs, logs, onCancel, onRetry }: Props) {
+export function QueueList({ jobs, logs, outputDir, onCancel, onRetry }: Props) {
   if (jobs.length === 0) {
     return <div className="empty">粘贴一个链接，开始下载</div>;
   }
@@ -33,7 +34,7 @@ export function QueueList({ jobs, logs, onCancel, onRetry }: Props) {
         <span className="c-act">操作</span>
       </div>
       {jobs.map((job) => (
-        <JobRow key={job.id} job={job} lines={logs[job.id] ?? []} onCancel={onCancel} onRetry={onRetry} />
+        <JobRow key={job.id} job={job} lines={logs[job.id] ?? []} outputDir={outputDir} onCancel={onCancel} onRetry={onRetry} />
       ))}
     </div>
   );
@@ -42,11 +43,13 @@ export function QueueList({ jobs, logs, onCancel, onRetry }: Props) {
 function JobRow({
   job,
   lines,
+  outputDir,
   onCancel,
   onRetry,
 }: {
   job: JobRecord;
   lines: string[];
+  outputDir: string;
   onCancel: (id: number) => void;
   onRetry: (job: JobRecord) => void;
 }) {
@@ -95,12 +98,12 @@ function JobRow({
             </svg>
           </button>
         )}
-        {job.status === "completed" && job.outputPath && (
+        {job.status === "completed" && (job.outputPath || outputDir) && (
           <button
             className="icon"
             aria-label="在文件夹中显示"
             title="在文件夹中显示"
-            onClick={() => revealItemInDir(job.outputPath!).catch(() => {})}
+            onClick={() => openDownloadLocation(job.outputPath ?? "", outputDir).catch(console.error)}
           >
             <svg viewBox="0 0 16 16" width="14" height="14" fill="none">
               <path
