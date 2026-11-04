@@ -1,0 +1,763 @@
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { getVersion } from "@tauri-apps/api/app";
+import { dependencyInfo } from "../lib/tauri";
+import type { DependencyInfo } from "../types";
+import {
+  CONCURRENCY_MAX,
+  CONCURRENCY_MIN,
+  loadProxyType,
+  saveLangPref,
+  saveProxyType,
+  type ProxyType,
+} from "../lib/settings";
+import { getLangPref, setLangPref, t, type LangPref } from "../lib/i18n";
+
+/* ========================================================================
+ * 侧栏功能菜单:联系客服(悬停飞窗)/ 问题反馈(弹窗)/ 设置(弹窗)
+ * ==================================================================== */
+
+// TODO: 支持渠道占位值,上线前替换为真实的 Telegram/Discord 邀请链接、客服邮箱与 QQ 群号
+const TELEGRAM_URL = "https://t.me/your-community";
+const DISCORD_URL = "https://discord.gg/your-community";
+const SUPPORT_EMAIL = "support@example.com";
+const QQ_GROUP = "100000000";
+
+/* ---- 小图标(线性风格,继承 currentColor) ---- */
+
+const I = {
+  headphones: (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 16v-3a8 8 0 0 1 16 0v3" />
+      <rect x="3" y="14.5" width="4.2" height="6" rx="1.6" />
+      <rect x="16.8" y="14.5" width="4.2" height="6" rx="1.6" />
+    </svg>
+  ),
+  feedback: (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      <path d="M8.5 9.5h7M8.5 12.5h4" />
+    </svg>
+  ),
+  gear: (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden>
+      <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.34-1.05-.63-1.62-.83l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.57.2-1.13.49-1.62.83l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.34 1.05.63 1.62.83l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.57-.2 1.13-.49 1.62-.83l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+    </svg>
+  ),
+  telegram: (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M22 2 11 13" />
+      <path d="M22 2 15 22l-4-9-9-4L22 2Z" />
+    </svg>
+  ),
+  discord: (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M5.5 5.5C8 4.4 16 4.4 18.5 5.5l1.3 7.8c-2 1.9-4.2 2.9-6.4 3.1L12.6 15c-.4.1-.9.1-1.2 0l-.8 1.4c-2.2-.2-4.4-1.2-6.4-3.1L5.5 5.5Z" />
+      <circle cx="9.6" cy="10.4" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="14.4" cy="10.4" r="1.1" fill="currentColor" stroke="none" />
+    </svg>
+  ),
+  mail: (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="5.5" width="18" height="13" rx="2" />
+      <path d="m3.5 7 8.5 6 8.5-6" />
+    </svg>
+  ),
+  qq: (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 3.5c-3 0-5 2.6-5 5.5 0 .6-1 2.4-1.4 3.9-.4 1.6.3 2.3 1.3 1.9.3 1.4 1.2 2.6 2.3 3.3-.9.4-1.4 1-1.4 1.5 0 1 1.8 1.4 4.2 1.4s4.2-.4 4.2-1.4c0-.5-.5-1.1-1.4-1.5 1.1-.7 2-1.9 2.3-3.3 1 .4 1.7-.3 1.3-1.9C18 11.4 17 9.6 17 9c0-2.9-2-5.5-5-5.5Z" />
+      <path d="M10.2 8.2h.01M13.8 8.2h.01" strokeWidth="2.2" />
+    </svg>
+  ),
+  close: (
+    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+      <path d="m3.5 3.5 9 9M12.5 3.5l-9 9" />
+    </svg>
+  ),
+};
+
+export { I as menuIcons };
+
+/* ---- 工具 ---- */
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.cssText = "position:fixed;opacity:0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
+function useEscClose(onClose: () => void) {
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+}
+
+/** 弹窗遮罩:点空白处关闭 */
+function Modal({
+  label,
+  onClose,
+  children,
+  wide,
+}: {
+  label: string;
+  onClose: () => void;
+  children: ReactNode;
+  wide?: boolean;
+}) {
+  useEscClose(onClose);
+  return (
+    <div
+      className="modal-mask"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className={wide ? "modal modal-wide" : "modal"} role="dialog" aria-modal="true" aria-label={label}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ---- 联系客服:悬停飞窗 ---- */
+
+export function SupportMenuItem() {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  async function handleCopy(key: string, value: string) {
+    if (await copyText(value)) {
+      setCopied(key);
+      window.setTimeout(() => setCopied((c) => (c === key ? null : c)), 1600);
+    }
+  }
+
+  return (
+    <div
+      className="menu-host"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button className="menu-row" type="button" aria-haspopup="menu" aria-expanded={open}>
+        {I.headphones}
+        <span>{t("menu.support")}</span>
+      </button>
+      {open && (
+        <div className="flyout" role="menu">
+          <button className="fly-row" type="button" role="menuitem" onClick={() => openUrl(TELEGRAM_URL).catch(() => {})}>
+            {I.telegram}
+            <strong>{t("fly.telegram")}</strong>
+          </button>
+          <button className="fly-row" type="button" role="menuitem" onClick={() => openUrl(DISCORD_URL).catch(() => {})}>
+            {I.discord}
+            <strong>{t("fly.discord")}</strong>
+          </button>
+          <button className="fly-row" type="button" role="menuitem" onClick={() => handleCopy("email", SUPPORT_EMAIL)}>
+            {I.mail}
+            <span className="fly-copy">
+              <strong>{t("fly.email")}</strong>
+              <small>{copied === "email" ? t("fly.copied") : SUPPORT_EMAIL}</small>
+            </span>
+          </button>
+          <button className="fly-row" type="button" role="menuitem" onClick={() => handleCopy("qq", QQ_GROUP)}>
+            {I.qq}
+            <span className="fly-copy">
+              <strong>{t("fly.qq")}</strong>
+              <small>{copied === "qq" ? t("fly.copied") : QQ_GROUP}</small>
+            </span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---- 账户入口:未登录点击=占位登录;已登录悬停弹出账户卡片 ---- */
+
+// TODO: 接入真实登录后移除 —— 目前以本地占位账号模拟已登录态(内存态,重启即退登)
+const PLACEHOLDER_USER = { name: "admin", email: "admin@example.com" } as const;
+
+export function AccountMenuItem() {
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [pwdOpen, setPwdOpen] = useState(false);
+  const [anchor, setAnchor] = useState<{ left: number; bottom: number } | null>(null);
+  const entryRef = useRef<HTMLButtonElement>(null);
+  const closeTimer = useRef(0);
+
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+
+  // 卡片经 portal 渲染在 body 层(不受 .side/.platform-rows 层叠影响)，按条目 rect 定位到其右上方
+  function showCard() {
+    const r = entryRef.current?.getBoundingClientRect();
+    if (!r) return;
+    // 卡片弹在条目正上方(侧栏内，向上展开盖住菜单区)
+    setAnchor({
+      left: Math.max(8, r.left - 4),
+      bottom: window.innerHeight - r.top + 6,
+    });
+    window.clearTimeout(closeTimer.current);
+    setOpen(true);
+  }
+
+  function scheduleClose() {
+    window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => setOpen(false), 160);
+  }
+
+  // 鼠标从条目移到 portal 卡片会先触发条目 mouseleave，靠延迟关闭兜住这段空隙
+  function keepOpen() {
+    window.clearTimeout(closeTimer.current);
+    setOpen(true);
+  }
+
+  return (
+    <>
+      <button
+        ref={entryRef}
+        className="account-entry"
+        type="button"
+        aria-label={t("account.aria")}
+        title={loggedIn ? undefined : t("account.title")}
+        onMouseEnter={loggedIn ? showCard : undefined}
+        onMouseLeave={loggedIn ? scheduleClose : undefined}
+        onClick={() => {
+          if (!loggedIn) setLoggedIn(true); // 占位:点击即"登录"
+        }}
+      >
+        <span className="account-avatar" aria-hidden>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+            <circle cx="12" cy="8.5" r="3.5" fill="currentColor" />
+            <path d="M5.5 19c.5-3.2 2.7-5 6.5-5s6 1.8 6.5 5" fill="currentColor" />
+          </svg>
+        </span>
+        <span className="account-copy">
+          <strong>{loggedIn ? PLACEHOLDER_USER.name : t("account.notLoggedIn")}</strong>
+          <small>{loggedIn ? PLACEHOLDER_USER.email : t("account.clickToLogin")}</small>
+        </span>
+        <svg
+          className="account-arrow"
+          viewBox="0 0 16 16"
+          width="14"
+          height="14"
+          fill="none"
+          aria-hidden
+        >
+          <path
+            d="m6 3.5 4.5 4.5L6 12.5"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+      {loggedIn && open && anchor && (
+        createPortal(
+          <div
+            className="flyout flyout-account"
+            style={{ position: "fixed", left: anchor.left, bottom: anchor.bottom, zIndex: 95 }}
+            onMouseEnter={keepOpen}
+            onMouseLeave={scheduleClose}
+          >
+            <div className="acc-head">
+              <div className="acc-name-row">
+                <strong>{PLACEHOLDER_USER.name}</strong>
+                <span className="acc-badge">{t("account.plan")}</span>
+              </div>
+              <small className="acc-email">{PLACEHOLDER_USER.email}</small>
+            </div>
+            {/* 个人中心/设置密码暂无后端，占位显示；退出登录切回未登录态 */}
+            <button className="acc-row" type="button" title={t("account.todo")}>
+              {t("account.personal")}
+            </button>
+            <button
+              className="acc-row"
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setPwdOpen(true);
+              }}
+            >
+              {t("account.setPassword")}
+            </button>
+            <button
+              className="acc-row"
+              type="button"
+              onClick={() => {
+                setLoggedIn(false);
+                setOpen(false);
+              }}
+            >
+              {t("account.logout")}
+            </button>
+          </div>,
+          document.body,
+        )
+      )}
+      {pwdOpen && <PasswordModal onClose={() => setPwdOpen(false)} />}
+    </>
+  );
+}
+
+/* ---- 设置密码:纯前端占位弹窗(校验后仅展示成功态，数据不上传) ---- */
+
+export function PasswordModal({ onClose }: { onClose: () => void }) {
+  const [pwd, setPwd] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [revealPwd, setRevealPwd] = useState(false);
+  const [revealConfirm, setRevealConfirm] = useState(false);
+  const [err, setErr] = useState<"empty" | "mismatch" | null>(null);
+  const [done, setDone] = useState(false);
+
+  function save() {
+    if (!pwd || !confirm) {
+      setErr("empty");
+      return;
+    }
+    if (pwd !== confirm) {
+      setErr("mismatch");
+      return;
+    }
+    // TODO: 接入后端后在这里调用真实的设置密码接口
+    setDone(true);
+  }
+
+  function Eye({ off }: { off: boolean }) {
+    return (
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden>
+        <path
+          d="M2.6 12S6.1 5.6 12 5.6 21.4 12 21.4 12 17.9 18.4 12 18.4 2.6 12 2.6 12Z"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+        <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" />
+        {off && <path d="M4.5 4.5 19.5 19.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />}
+      </svg>
+    );
+  }
+
+  function field(
+    id: string,
+    label: string,
+    placeholder: string,
+    value: string,
+    reveal: boolean,
+    onValue: (v: string) => void,
+    onToggle: () => void,
+    invalid: boolean,
+  ) {
+    return (
+      <div className="pwd-field">
+        <label htmlFor={id}>{label}</label>
+        <div className="pwd-wrap">
+          <input
+            id={id}
+            className={invalid ? "pwd-input invalid" : "pwd-input"}
+            type={reveal ? "text" : "password"}
+            value={value}
+            placeholder={placeholder}
+            autoComplete="off"
+            onChange={(e) => {
+              onValue(e.target.value);
+              if (err) setErr(null);
+            }}
+          />
+          <button
+            type="button"
+            className="pwd-eye"
+            aria-label={reveal ? t("pwd.hide") : t("pwd.show")}
+            onClick={onToggle}
+          >
+            <Eye off={reveal} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return createPortal(
+    <Modal label={t("account.setPassword")} onClose={onClose}>
+      {done ? (
+        <div className="feedback-done">
+          <svg viewBox="0 0 48 48" width="52" height="52" fill="none" aria-hidden>
+            <circle cx="24" cy="24" r="22" fill="var(--mist)" />
+            <path
+              d="m15 24.5 6 6 12-13"
+              stroke="var(--indigo)"
+              strokeWidth="3.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <h3>{t("pwd.doneTitle")}</h3>
+          <p>{t("pwd.doneDesc")}</p>
+          <button className="primary" type="button" onClick={onClose}>
+            {t("fb.close")}
+          </button>
+        </div>
+      ) : (
+        <>
+          <header className="modal-head">
+            <h3>{t("account.setPassword")}</h3>
+            <button className="clear" type="button" onClick={onClose} aria-label={t("common.close")}>
+              {I.close}
+            </button>
+          </header>
+          <div className="modal-body">
+            {field(
+              "pwd-input",
+              t("pwd.label"),
+              t("pwd.placeholder"),
+              pwd,
+              revealPwd,
+              setPwd,
+              () => setRevealPwd(!revealPwd),
+              err === "empty",
+            )}
+            {field(
+              "pwd-confirm",
+              t("pwd.confirmLabel"),
+              t("pwd.confirmPlaceholder"),
+              confirm,
+              revealConfirm,
+              setConfirm,
+              () => setRevealConfirm(!revealConfirm),
+              err === "empty" || err === "mismatch",
+            )}
+            {err === "empty" && <p className="desc-error">{t("pwd.required")}</p>}
+            {err === "mismatch" && <p className="desc-error">{t("pwd.mismatch")}</p>}
+            <div className="pwd-actions">
+              <button className="primary" type="button" onClick={save}>
+                {t("pwd.save")}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </Modal>,
+    document.body,
+  );
+}
+
+/* ---- 问题反馈 ---- */
+
+export function FeedbackModal({ onClose }: { onClose: () => void }) {
+  const [kind, setKind] = useState<"bug" | "feature">("bug");
+  const [text, setText] = useState("");
+  const [invalid, setInvalid] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  // 纯前端占位:提交仅展示成功态,数据暂不上报
+  function submit() {
+    if (!text.trim()) {
+      setInvalid(true);
+      return;
+    }
+    setSubmitted(true);
+  }
+
+  return (
+    <Modal label={t("fb.title")} onClose={onClose} wide>
+      {submitted ? (
+        <div className="feedback-done">
+          <svg viewBox="0 0 48 48" width="52" height="52" fill="none" aria-hidden>
+            <circle cx="24" cy="24" r="22" fill="var(--mist)" />
+            <path d="m15 24.5 6 6 12-13" stroke="var(--indigo)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <h3>{t("fb.doneTitle")}</h3>
+          <p>{kind === "bug" ? t("fb.doneBug") : t("fb.doneFeature")}</p>
+          <button className="primary" type="button" onClick={onClose}>
+            {t("fb.close")}
+          </button>
+        </div>
+      ) : (
+        <>
+          <header className="modal-head">
+            <h3>{t("fb.title")}</h3>
+            <button className="clear" type="button" onClick={onClose} aria-label={t("common.close")}>
+              {I.close}
+            </button>
+          </header>
+          <div className="modal-body">
+            <p className="modal-intro">{t("fb.intro")}</p>
+            <div className="radio-cards">
+              <label className={kind === "bug" ? "radio-card on" : "radio-card"}>
+                <input type="radio" name="feedback-kind" checked={kind === "bug"} onChange={() => setKind("bug")} />
+                <span className="radio-dot" aria-hidden />
+                <span className="radio-text">
+                  <strong>{t("fb.bugTitle")}</strong>
+                  <small>{t("fb.bugDesc")}</small>
+                </span>
+              </label>
+              <label className={kind === "feature" ? "radio-card on" : "radio-card"}>
+                <input type="radio" name="feedback-kind" checked={kind === "feature"} onChange={() => setKind("feature")} />
+                <span className="radio-dot" aria-hidden />
+                <span className="radio-text">
+                  <strong>{t("fb.featureTitle")}</strong>
+                  <small>{t("fb.featureDesc")}</small>
+                </span>
+              </label>
+            </div>
+            <h4>{t("fb.descLabel")}</h4>
+            <textarea
+              className={invalid ? "desc invalid" : "desc"}
+              rows={6}
+              value={text}
+              placeholder={t("fb.descPlaceholder")}
+              onChange={(e) => {
+                setText(e.target.value);
+                if (invalid) setInvalid(false);
+              }}
+            />
+            {invalid && <p className="desc-error">{t("fb.descRequired")}</p>}
+            <p className="desc-hint">{t("fb.descHint")}</p>
+            <button className="primary" type="button" onClick={submit}>
+              {t("fb.submit")}
+            </button>
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+/* ---- 设置(常规 / 网络 / 关于) ---- */
+
+// TODO: 官网占位,替换为真实站点地址
+const WEBSITE_URL = "https://example.com";
+
+type SettingsTab = "general" | "network" | "about";
+
+export function SettingsModal({
+  outputDir,
+  autoMode,
+  autoDisabled,
+  maxConcurrency,
+  onPickDir,
+  onToggleAuto,
+  onSetMaxConcurrency,
+  onClose,
+}: {
+  outputDir: string;
+  autoMode: boolean;
+  autoDisabled: boolean;
+  maxConcurrency: number;
+  onPickDir: () => void;
+  onToggleAuto: (v: boolean) => void;
+  onSetMaxConcurrency: (n: number) => void;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState<SettingsTab>("general");
+  const [langPref, setLangPrefState] = useState<LangPref>(getLangPref());
+
+  function changeLang(p: LangPref) {
+    setLangPrefState(p);
+    setLangPref(p);
+    saveLangPref(p).catch(() => {});
+  }
+
+  return (
+    <Modal label={t("set.title")} onClose={onClose} wide>
+      <header className="modal-head">
+        <h3>{t("set.title")}</h3>
+        <button className="clear" type="button" onClick={onClose} aria-label={t("common.close")}>
+          {I.close}
+        </button>
+      </header>
+      <div className="settings-layout">
+        <nav className="settings-tabs" aria-label={t("set.title")}>
+          {(
+            [
+              ["general", t("set.tabGeneral")],
+              ["network", t("set.tabNetwork")],
+              ["about", t("set.tabAbout")],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={tab === key ? "settings-tab on" : "settings-tab"}
+              onClick={() => setTab(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+        <div className="settings-content">
+          {tab === "general" && (
+            <>
+              <div className="setting-block">
+                <h4>{t("set.langLabel")}</h4>
+                <select
+                  className="select"
+                  value={langPref}
+                  onChange={(e) => changeLang(e.target.value as LangPref)}
+                  aria-label={t("set.langLabel")}
+                >
+                  <option value="system">{t("lang.system")}</option>
+                  <option value="zh">{t("lang.zh")}</option>
+                  <option value="en">{t("lang.en")}</option>
+                </select>
+              </div>
+              <div className="setting-block">
+                <h4>{t("set.dirLabel")}</h4>
+                <div className="dir-row">
+                  <span className="dir" title={outputDir}>
+                    {outputDir || "…"}
+                  </span>
+                  <button className="chg" type="button" onClick={onPickDir}>
+                    {t("set.dirChange")}
+                  </button>
+                </div>
+              </div>
+              <div className="setting-block toggle-row">
+                <span className="toggle-copy">
+                  <h4>{t("set.autoLabel")}</h4>
+                  <small>{t("set.autoDesc")}</small>
+                </span>
+                <label className={autoDisabled ? "auto disabled" : "auto"}>
+                  <input
+                    type="checkbox"
+                    checked={autoMode}
+                    disabled={autoDisabled}
+                    onChange={(e) => onToggleAuto(e.target.checked)}
+                    aria-label={t("set.autoLabel")}
+                  />
+                  <span className="sw" aria-hidden />
+                </label>
+              </div>
+              <div className="setting-block toggle-row">
+                <span className="toggle-copy">
+                  <h4>{t("set.concLabel")}</h4>
+                  <small>{t("set.concDesc", { min: CONCURRENCY_MIN, max: CONCURRENCY_MAX })}</small>
+                </span>
+                <div className="stepper">
+                  <button
+                    type="button"
+                    aria-label={t("set.dec")}
+                    disabled={maxConcurrency <= CONCURRENCY_MIN}
+                    onClick={() => onSetMaxConcurrency(maxConcurrency - 1)}
+                  >
+                    −
+                  </button>
+                  <span className="num">{maxConcurrency}</span>
+                  <button
+                    type="button"
+                    aria-label={t("set.inc")}
+                    disabled={maxConcurrency >= CONCURRENCY_MAX}
+                    onClick={() => onSetMaxConcurrency(maxConcurrency + 1)}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+          {tab === "network" && <NetworkPane />}
+          {tab === "about" && <AboutPane />}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/* ---- 网络页:代理偏好暂存(未接下载引擎) ---- */
+
+const PROXY_KEYS: Record<ProxyType, "proxy.none" | "proxy.http" | "proxy.socks5"> = {
+  none: "proxy.none",
+  http: "proxy.http",
+  socks5: "proxy.socks5",
+};
+
+function NetworkPane() {
+  const [proxy, setProxy] = useState<ProxyType>("none");
+  useEffect(() => {
+    loadProxyType().then(setProxy).catch(() => {});
+  }, []);
+
+  function change(v: ProxyType) {
+    setProxy(v);
+    saveProxyType(v).catch(() => {});
+  }
+
+  return (
+    <>
+      <div className="setting-block">
+        <h4>{t("set.proxyLabel")}</h4>
+        <select
+          className="select"
+          value={proxy}
+          onChange={(e) => change(e.target.value as ProxyType)}
+          aria-label={t("set.proxyLabel")}
+        >
+          {(Object.keys(PROXY_KEYS) as ProxyType[]).map((k) => (
+            <option key={k} value={k}>
+              {t(PROXY_KEYS[k])}
+            </option>
+          ))}
+        </select>
+      </div>
+      <p className="setting-note">{t("set.proxyNote")}</p>
+    </>
+  );
+}
+
+/* ---- 关于页:真实版本信息 ---- */
+
+function AboutPane() {
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [dep, setDep] = useState<DependencyInfo | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    getVersion()
+      .then((v) => alive && setAppVersion(v))
+      .catch(() => {});
+    dependencyInfo()
+      .then((d) => alive && setDep(d))
+      .catch(() => {}); // PyInstaller 静态包首探可能较慢,失败时留空
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const rows: [string, string][] = [
+    [t("about.version"), appVersion ? `v${appVersion}` : "—"],
+    [t("about.components"), dep ? `${dep.ytDlpVersion ?? "?"} / ${dep.ffmpegVersion ?? "?"}` : "—"],
+    [t("about.website"), WEBSITE_URL],
+  ];
+
+  return (
+    <div className="about-list">
+      {rows.map(([k, v]) => (
+        <div className="about-row" key={k}>
+          <span className="k">{k}</span>
+          <span className="v">{v}</span>
+        </div>
+      ))}
+      <p className="setting-note">{t("about.componentsNote")}</p>
+    </div>
+  );
+}
+

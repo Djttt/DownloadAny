@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormatOption, JobRecord, VideoInfo } from "../types";
 import { fmtBytes, fmtDuration, fmtSpeed } from "../lib/format";
 import { openDownloadLocation } from "../lib/tauri";
+import { t } from "../lib/i18n";
 
 const AUDIO_FORMATS: FormatOption[] = [
   { id: "__audio_mp3__", label: "MP3" },
@@ -68,8 +69,8 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
 
       <div className="download-options">
         <DownloadRow
-          label="视频"
-          selectLabel="选择清晰度"
+          label={t("video.label")}
+          selectLabel={t("video.quality")}
           options={videoFormats}
           value={selected.video}
           job={rowJobs.video == null ? undefined : jobs[rowJobs.video]}
@@ -81,8 +82,8 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
           onCancel={onCancel}
         />
         <DownloadRow
-          label="字幕"
-          selectLabel="字幕格式"
+          label={t("subtitle.label")}
+          selectLabel={t("subtitle.format")}
           options={subtitleFormats}
           value={selected.subtitle}
           job={rowJobs.subtitle == null ? undefined : jobs[rowJobs.subtitle]}
@@ -93,8 +94,8 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
           onCancel={onCancel}
         />
         <DownloadRow
-          label="仅音频"
-          selectLabel="音频格式"
+          label={t("audio.label")}
+          selectLabel={t("audio.format")}
           options={AUDIO_FORMATS}
           value={selected.audio}
           job={rowJobs.audio == null ? undefined : jobs[rowJobs.audio]}
@@ -105,8 +106,8 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
           onCancel={onCancel}
         />
         <DownloadRow
-          label="封面图片"
-          selectLabel="图片格式"
+          label={t("cover.label")}
+          selectLabel={t("cover.format")}
           options={IMAGE_FORMATS}
           value={selected.image}
           job={rowJobs.image == null ? undefined : jobs[rowJobs.image]}
@@ -118,7 +119,7 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
         />
       </div>
 
-      <button className="format-close clear" aria-label="收起" onClick={onDiscard}>
+      <button className="format-close clear" aria-label={t("card.collapse")} onClick={onDiscard}>
         <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden>
           <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         </svg>
@@ -155,9 +156,9 @@ function DownloadRow({
   const active = job?.status === "queued" || job?.status === "running";
   const status =
     job?.status === "failed"
-        ? "失败"
+        ? t("status.failed")
         : job?.status === "cancelled"
-          ? "已取消"
+          ? t("status.cancelled")
           : null;
   const selectedOption = options.find((option) => option.id === value);
 
@@ -174,11 +175,11 @@ function DownloadRow({
           </div>
           <em>
             {job?.status === "queued"
-              ? "等待中"
+              ? t("row.waiting")
               : `${(job?.percent ?? 0).toFixed(0)}% · ${fmtSpeed(job?.speed)}`}
           </em>
           <button className="cancel-download" onClick={() => job && onCancel(job.id)}>
-            取消
+            {t("row.cancel")}
           </button>
         </div>
       ) : (
@@ -191,7 +192,7 @@ function DownloadRow({
               onChange={onChange}
             />
             {showSelectedSize && selectedOption?.filesize && (
-              <span>约 {fmtBytes(selectedOption.filesize)}</span>
+              <span>{t("row.approx", { size: fmtBytes(selectedOption.filesize) })}</span>
             )}
           </div>
           <div className="inline-download">
@@ -201,8 +202,8 @@ function DownloadRow({
                 type="button"
                 className="row-download folder-open"
                 disabled={!outputDir && !job.outputPath}
-                aria-label="打开文件所在文件夹"
-                title="打开文件所在文件夹"
+                aria-label={t("row.openFolder")}
+                title={t("row.openFolder")}
                 onClick={() => {
                   openDownloadLocation(job.outputPath ?? "", outputDir).catch(console.error);
                 }}
@@ -224,7 +225,7 @@ function DownloadRow({
                 disabled={busy || options.length === 0}
                 onClick={onDownload}
               >
-                {job?.status === "failed" ? "重试" : "下载"}
+                {job?.status === "failed" ? t("row.retry") : t("row.download")}
               </button>
             )}
           </div>
@@ -272,7 +273,7 @@ function FormatSelect({
           if (event.key === "Escape") setOpen(false);
         }}
       >
-        <span>{selected?.label ?? "暂无字幕"}</span>
+        <span>{selected?.label ?? t("video.noSubtitle")}</span>
         <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden>
           <path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>

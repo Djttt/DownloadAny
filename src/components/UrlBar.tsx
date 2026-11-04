@@ -4,6 +4,7 @@ import {
   type FormEvent,
   type MouseEvent,
 } from "react";
+import { t } from "../lib/i18n";
 
 interface Props {
   value: string;
@@ -86,7 +87,7 @@ export function UrlBar({
         <textarea
           ref={textareaRef}
           value={value}
-          placeholder={"每行输入一个视频链接，例如：\nhttps://www.youtube.com/watch?v=…"}
+          placeholder={t("url.placeholder")}
           onChange={(e) => onValueChange(e.target.value)}
           onPaste={handlePaste}
           onMouseDown={handleBlankAreaClick}
@@ -94,13 +95,13 @@ export function UrlBar({
           autoFocus
           wrap="off"
           rows={Math.min(Math.max(value.split(/\r?\n/).length, 2), 5)}
-          aria-label="视频链接，每行一个"
+          aria-label={t("url.aria")}
         />
         {value && (
           <button
             type="button"
             className="clear"
-            aria-label="清空"
+            aria-label={t("url.clear")}
             onClick={() => onValueChange("")}
             disabled={busy}
           >
@@ -133,10 +134,10 @@ export function UrlBar({
                   style={{ strokeDashoffset: 50.27 * (1 - downloadProgress / 100) }}
                 />
               </svg>
-              下载中 {Math.round(downloadProgress)}%
+              {t("url.downloading", { p: Math.round(downloadProgress) })}
             </>
           ) : busy ? (
-            "处理中…"
+            t("url.processing")
           ) : (
             <>
               <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
@@ -149,7 +150,13 @@ export function UrlBar({
                   fill="none"
                 />
               </svg>
-              {autoMode ? `下载${urls.length > 1 ? ` (${urls.length})` : ""}` : `解析${urls.length > 1 ? ` (${urls.length})` : ""}`}
+              {autoMode
+                ? urls.length > 1
+                  ? t("url.downloadN", { n: urls.length })
+                  : t("url.download")
+                : urls.length > 1
+                  ? t("url.parseN", { n: urls.length })
+                  : t("url.parse")}
             </>
           )}
         </button>
@@ -163,7 +170,7 @@ export function UrlBar({
             <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden>
               <rect x="4" y="4" width="8" height="8" rx="1.2" fill="currentColor" />
             </svg>
-            {cancelling ? "终止中…" : "终止下载"}
+            {cancelling ? t("url.stopping") : t("url.stop")}
           </button>
         )}
       </div>

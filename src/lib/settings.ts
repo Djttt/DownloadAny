@@ -1,5 +1,6 @@
 import { load } from "@tauri-apps/plugin-store";
 import { downloadDir } from "@tauri-apps/api/path";
+import type { LangPref } from "./i18n";
 
 async function store() {
   return load("settings.json", { autoSave: true });
@@ -25,4 +26,44 @@ export async function loadAutoMode(): Promise<boolean> {
 
 export async function saveAutoMode(on: boolean): Promise<void> {
   (await store()).set("autoMode", on);
+}
+
+/** 最大同时下载任务数：与 Rust 侧钳制范围(1..=10)保持一致 */
+export const CONCURRENCY_MIN = 1;
+export const CONCURRENCY_MAX = 10;
+export const CONCURRENCY_DEFAULT = 3;
+
+export async function loadMaxConcurrency(): Promise<number> {
+  const s = await store();
+  const v = await s.get<number>("maxConcurrency");
+  if (typeof v !== "number" || !Number.isFinite(v)) return CONCURRENCY_DEFAULT;
+  return Math.min(CONCURRENCY_MAX, Math.max(CONCURRENCY_MIN, Math.round(v)));
+}
+
+export async function saveMaxConcurrency(n: number): Promise<void> {
+  (await store()).set("maxConcurrency", n);
+}
+
+/** 界面语言偏好：system / zh / en */
+export async function loadLangPref(): Promise<LangPref> {
+  const s = await store();
+  const v = await s.get<string>("langPref");
+  return v === "zh" || v === "en" ? v : "system";
+}
+
+export async function saveLangPref(p: LangPref): Promise<void> {
+  (await store()).set("langPref", p);
+}
+
+/** 代理类型：当前仅保存偏好，尚未与 yt-dlp 引擎接通 */
+export type ProxyType = "none" | "http" | "socks5";
+
+export async function loadProxyType(): Promise<ProxyType> {
+  const s = await store();
+  const v = await s.get<string>("proxyType");
+  return v === "http" || v === "socks5" ? v : "none";
+}
+
+export async function saveProxyType(p: ProxyType): Promise<void> {
+  (await store()).set("proxyType", p);
 }

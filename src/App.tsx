@@ -9,22 +9,44 @@ import {
   onJobStatus,
   onLogLine,
   probeVideo,
+  setMaxConcurrency,
   type UnlistenFn,
 } from "./lib/tauri";
-import { loadAutoMode, loadOutputDir, saveAutoMode, saveOutputDir } from "./lib/settings";
+import {
+  CONCURRENCY_DEFAULT,
+  CONCURRENCY_MAX,
+  CONCURRENCY_MIN,
+  loadAutoMode,
+  loadLangPref,
+  loadMaxConcurrency,
+  loadOutputDir,
+  saveAutoMode,
+  saveMaxConcurrency,
+  saveOutputDir,
+} from "./lib/settings";
+import { setLangPref, t, useLang } from "./lib/i18n";
 import { UrlBar } from "./components/UrlBar";
 import { FormatBar } from "./components/VideoCard";
 import { QueueList } from "./components/QueueList";
 import { PlatformWall } from "./components/PlatformWall";
+import {
+  AccountMenuItem,
+  FeedbackModal,
+  SettingsModal,
+  SupportMenuItem,
+  menuIcons,
+} from "./components/SideMenu";
 import "./App.css";
 
 const LOG_CAP = 500;
 const TERMINAL: JobRecord["status"][] = ["completed", "failed", "cancelled"];
 
 type View = "download" | "history";
+type Dialog = "feedback" | "settings";
 type ParsedVideo = { key: string; order: number; url: string; info: VideoInfo };
 
 function App() {
+  useLang(); // 订阅语言切换：偏好变化时整树重渲染
   const [videos, setVideos] = useState<ParsedVideo[]>([]);
   const [urlInput, setUrlInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -33,19 +55,29 @@ function App() {
   const [logs, setLogs] = useState<Record<number, string[]>>({});
   const [outputDir, setOutputDir] = useState("");
   const [autoMode, setAutoMode] = useState(false);
+  const [maxConcurrency, setMaxConcurrencyState] = useState(CONCURRENCY_DEFAULT);
   const [autoJobIds, setAutoJobIds] = useState<number[]>([]);
   const [autoCancelling, setAutoCancelling] = useState(false);
   const autoCancelRequested = useRef(false);
   const [view, setView] = useState<View>("download");
+  const [dialog, setDialog] = useState<Dialog | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
         const existing = await listJobs();
         if (existing.length) setJobs(Object.fromEntries(existing.map((j) => [j.id, j])));
-        const [dir, auto] = await Promise.all([loadOutputDir(), loadAutoMode()]);
+        const [dir, auto, conc, lang] = await Promise.all([
+          loadOutputDir(),
+          loadAutoMode(),
+          loadMaxConcurrency(),
+          loadLangPref(),
+        ]);
         setOutputDir(dir);
         setAutoMode(auto);
+        setLangPref(lang);
+        setMaxConcurrencyState(conc);
+        await setMaxConcurrency(conc); // 把持久化的偏好推给 Rust 队列
       } catch (e) {
         console.error(e);
       }
@@ -92,7 +124,7 @@ function App() {
         prev[id] ?? {
           id,
           url: "",
-          title: `任务 #${id}`,
+          title: t("task.fallback", { id }),
           formatId: "",
           formatLabel: "",
           status: "queued",
@@ -142,7 +174,7 @@ function App() {
       });
       await Promise.all(workers);
       if (failures.length) {
-        setError(`${failures.length} 个链接解析失败：\n${failures.join("\n\n")}`);
+        setError(`${t("probe.failedCount", { n: failures.length })}\n${failures.join("\n\n")}`);
       }
     } finally {
       setBusy(false);
@@ -165,7 +197,7 @@ function App() {
       });
       upsert(id, {
         url,
-        title: title ?? `任务 #${id}`,
+        title: title ?? t("task.fallback", { id }),
         formatId: format.id,
         formatLabel: format.label,
       });
@@ -183,7 +215,7 @@ function App() {
   }
 
   async function pickDir() {
-    const sel = await open({ directory: true, defaultPath: outputDir, title: "选择下载目录" });
+    const sel = await open({ directory: true, defaultPath: outputDir, title: t("dir.pickerTitle") });
     if (typeof sel === "string") {
       setOutputDir(sel);
       saveOutputDir(sel).catch(console.error);
@@ -193,6 +225,14 @@ function App() {
   function toggleAuto(v: boolean) {
     setAutoMode(v);
     saveAutoMode(v).catch(console.error);
+  }
+
+  /** 并发上限：钳制 → 状态 → 持久化 → 推给 Rust 立即生效 */
+  function applyMaxConcurrency(n: number) {
+    const v = Math.min(CONCURRENCY_MAX, Math.max(CONCURRENCY_MIN, n));
+    setMaxConcurrencyState(v);
+    saveMaxConcurrency(v).catch(console.error);
+    setMaxConcurrency(v).catch(console.error);
   }
 
   async function cancelAutoDownload() {
@@ -255,7 +295,7 @@ function App() {
           </span>
           <span className="word">DownloadAny</span>
         </div>
-        <nav aria-label="主导航">
+        <nav aria-label={t("nav.mainAria")}>
           <button
             className={view === "download" ? "nav on" : "nav"}
             onClick={(event) => {
@@ -272,7 +312,7 @@ function App() {
                 strokeLinejoin="round"
               />
             </svg>
-            <span>下载</span>
+            <span>{t("nav.download")}</span>
             {running > 0 && <span className="count">{running}</span>}
           </button>
           <button
@@ -286,60 +326,28 @@ function App() {
               <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.5" />
               <path d="M8 5v3.2l2.2 1.6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
-            <span>历史</span>
+            <span>{t("nav.history")}</span>
           </button>
         </nav>
-        <button
-          className="account-entry"
-          type="button"
-          title="登录功能待接入"
-          aria-label="登录账户"
-        >
-          <span className="account-avatar" aria-hidden>
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
-              <circle cx="12" cy="8.5" r="3.5" fill="currentColor" />
-              <path d="M5.5 19c.5-3.2 2.7-5 6.5-5s6 1.8 6.5 5" fill="currentColor" />
-            </svg>
-          </span>
-          <span className="account-copy">
-            <strong>未登录</strong>
-            <small>点击登录</small>
-          </span>
-          <svg
-            className="account-arrow"
-            viewBox="0 0 16 16"
-            width="14"
-            height="14"
-            fill="none"
-            aria-hidden
-          >
-            <path
-              d="m6 3.5 4.5 4.5L6 12.5"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
+        <div className="side-menu">
+          <SupportMenuItem />
+          <button className="menu-row" type="button" onClick={() => setDialog("feedback")}>
+            {menuIcons.feedback}
+            <span>{t("menu.feedback")}</span>
+          </button>
+          <button className="menu-row" type="button" onClick={() => setDialog("settings")}>
+            {menuIcons.gear}
+            <span>{t("menu.settings")}</span>
+          </button>
+        </div>
+        <AccountMenuItem />
       </aside>
 
       <main className="main">
         {view === "download" ? (
           <>
             <header className="head">
-              <h1>视频 / 音频下载器</h1>
-              <label className={`auto${busy || autoDownloadActive ? " disabled" : ""}`}>
-                <input
-                  type="checkbox"
-                  checked={autoMode}
-                  disabled={busy || autoDownloadActive}
-                  onChange={(e) => toggleAuto(e.target.checked)}
-                  aria-label="自动下载"
-                />
-                <span className="sw" aria-hidden />
-                自动下载
-              </label>
+              <h1>{t("app.title")}</h1>
             </header>
             <UrlBar
               value={urlInput}
@@ -355,21 +363,21 @@ function App() {
           </>
         ) : (
           <header className="head history-head">
-            <h1>历史记录</h1>
+            <h1>{t("app.historyTitle")}</h1>
           </header>
         )}
 
         {all.length > 0 && view === "history" && (
           <div className="stats">
-            {all.length} 项
-            {running > 0 && <em> · {running} 下载中</em>}
-            {done > 0 && <em> · {done} 已完成</em>}
+            {t("stats.items", { n: all.length })}
+            {running > 0 && <em> {t("stats.downloading", { n: running })}</em>}
+            {done > 0 && <em> {t("stats.completed", { n: done })}</em>}
           </div>
         )}
 
         {view === "download" ? (
           videos.length ? (
-            <section className="format-results" aria-label="解析结果">
+            <section className="format-results" aria-label={t("app.probeAria")}>
               {videos.map((item) => (
                 <FormatBar
                   key={item.key}
@@ -385,21 +393,26 @@ function App() {
             </section>
           ) : <PlatformWall />
         ) : (
-          <section className="list" aria-label={view === "history" ? "历史任务" : "下载队列"}>
+          <section className="list" aria-label={view === "history" ? t("app.listAriaHistory") : t("app.listAriaQueue")}>
             <QueueList jobs={visible} logs={logs} outputDir={outputDir} onCancel={cancel} onRetry={handleRetry} />
           </section>
         )}
 
-        <footer className="savebar">
-          <span className="lab">保存到</span>
-          <span className="dir" title={outputDir}>
-            {outputDir || "…"}
-          </span>
-          <button className="chg" onClick={pickDir}>
-            更改目录
-          </button>
-        </footer>
       </main>
+
+      {dialog === "feedback" && <FeedbackModal onClose={() => setDialog(null)} />}
+      {dialog === "settings" && (
+        <SettingsModal
+          outputDir={outputDir}
+          autoMode={autoMode}
+          autoDisabled={busy || autoDownloadActive}
+          maxConcurrency={maxConcurrency}
+          onPickDir={pickDir}
+          onToggleAuto={toggleAuto}
+          onSetMaxConcurrency={applyMaxConcurrency}
+          onClose={() => setDialog(null)}
+        />
+      )}
     </div>
   );
 

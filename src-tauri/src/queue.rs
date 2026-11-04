@@ -7,21 +7,103 @@ use crate::progress::{self, ProgressUpdate};
 use crate::probe;
 use crate::resolve;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::sync::{mpsc, Semaphore};
+use tokio::sync::{mpsc, oneshot};
 
-/// v1 固定并发上限（设置页可调为后续项）
-const MAX_CONCURRENT: usize = 3;
+/// 并发上限默认值与可调范围（设置页“最大同时下载任务数”）
+pub const DEFAULT_MAX_CONCURRENT: usize = 3;
+pub const MIN_CONCURRENT: usize = 1;
+pub const MAX_CONCURRENT_LIMIT: usize = 10;
 /// stderr/stdout 静默看门狗阈值
 const WATCHDOG_SILENCE: Duration = Duration::from_secs(120);
 /// SIGTERM 后等待优雅退出的时间，超时则 SIGKILL
 const GRACEFUL_KILL_WAIT: Duration = Duration::from_secs(2);
+
+/// 动态并发闸：替代固定容量 Semaphore。
+/// - 名额不足时排队（oneshot 唤醒），`set_limit` 调大即时放行已排队任务；
+/// - 调小只影响后续放行，已持有名额的运行中任务不被打断。
+struct Gate {
+    inner: Mutex<GateInner>,
+}
+
+struct GateInner {
+    limit: usize,
+    active: usize,
+    waiters: VecDeque<oneshot::Sender<()>>,
+}
+
+/// 持有期间占用一个名额，drop 时释放并唤醒队首
+struct GateGuard<'a> {
+    gate: &'a Gate,
+}
+
+impl Drop for GateGuard<'_> {
+    fn drop(&mut self) {
+        let mut g = self.gate.inner.lock().unwrap();
+        g.active -= 1;
+        if g.active < g.limit {
+            // 已死 waiter（任务被 drop）的 send 失败则跳过，继续补位唤醒
+            while let Some(tx) = g.waiters.pop_front() {
+                if tx.send(()).is_ok() {
+                    break;
+                }
+            }
+        }
+    }
+}
+
+impl Gate {
+    fn new(limit: usize) -> Self {
+        Self {
+            inner: Mutex::new(GateInner {
+                limit,
+                active: 0,
+                waiters: VecDeque::new(),
+            }),
+        }
+    }
+
+    async fn acquire(&self) -> GateGuard<'_> {
+        loop {
+            let rx = {
+                let mut g = self.inner.lock().unwrap();
+                if g.active < g.limit {
+                    g.active += 1;
+                    return GateGuard { gate: self };
+                }
+                let (tx, rx) = oneshot::channel();
+                g.waiters.push_back(tx);
+                rx
+            };
+            // 醒来后回到循环重新检查名额（可能与其他唤醒者竞争）
+            let _ = rx.await;
+        }
+    }
+
+    fn set_limit(&self, n: usize) {
+        let mut g = self.inner.lock().unwrap();
+        g.limit = n;
+        // 调大后最多唤醒 (limit - active) 个等待者；名额仍由醒来后的
+        // acquire 循环复查确认，落选者重新排队
+        let mut budget = n.saturating_sub(g.active);
+        while budget > 0 {
+            match g.waiters.pop_front() {
+                Some(tx) => {
+                    if tx.send(()).is_ok() {
+                        budget -= 1;
+                    }
+                }
+                None => break,
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -78,7 +160,7 @@ struct Inner {
     jobs: Mutex<HashMap<u64, JobRecord>>,
     controls: Mutex<HashMap<u64, Arc<JobControl>>>,
     next_id: AtomicU64,
-    sem: Semaphore,
+    gate: Gate,
     /// url -> 该次探测返回的真实 format_id 集合（入队白名单校验）
     probed: Mutex<HashMap<String, HashSet<String>>>,
 }
@@ -95,10 +177,15 @@ impl AppState {
                 jobs: Mutex::new(HashMap::new()),
                 controls: Mutex::new(HashMap::new()),
                 next_id: AtomicU64::new(0),
-                sem: Semaphore::new(MAX_CONCURRENT),
+                gate: Gate::new(DEFAULT_MAX_CONCURRENT),
                 probed: Mutex::new(HashMap::new()),
             }),
         }
+    }
+
+    /// 设置并发上限（1..=10 钳制）。调大立即放行已排队任务，调小不打断运行中任务。
+    pub fn set_max_concurrency(&self, n: usize) {
+        self.inner.gate.set_limit(n.clamp(MIN_CONCURRENT, MAX_CONCURRENT_LIMIT));
     }
 
     pub fn cache_probe_ids(&self, url: &str, ids: HashSet<String>) {
@@ -271,10 +358,8 @@ async fn forward_lines<R: tokio::io::AsyncRead + Unpin>(
 }
 
 async fn run_job(app: AppHandle, state: AppState, id: u64, opts: DownloadOptions) {
-    // 并发闸：拿不到 permit 就排队
-    let Ok(permit) = state.inner.sem.acquire().await else {
-        return;
-    };
+    // 并发闸：拿不到名额就排队（GateGuard drop 时自动释放并唤醒队首）
+    let permit = state.inner.gate.acquire().await;
     let control = state.control(id);
     if control.cancelled.load(Ordering::SeqCst) {
         state.update(id, |r| r.status = JobStatus::Cancelled);
@@ -312,7 +397,7 @@ async fn run_job(app: AppHandle, state: AppState, id: u64, opts: DownloadOptions
         Ok(c) => c,
         Err(e) => {
             finish(&app, &state, id, JobStatus::Failed, Some(AppError::Spawn(e.to_string()).to_string()));
-            drop(permit);
+            // permit 随 return 自动释放
             return;
         }
     };
@@ -448,4 +533,50 @@ pub async fn probe_and_cache(url: &str, state: &AppState) -> Result<probe::Video
     let result = probe::probe(url).await?;
     state.cache_probe_ids(url, result.valid_ids);
     Ok(result.info)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn gate_blocks_beyond_limit_and_admits_on_release() {
+        let gate = Gate::new(2);
+        let a = gate.acquire().await;
+        let b = gate.acquire().await;
+        // 名额已满：第三个 acquire 应挂起
+        let mut third = Box::pin(gate.acquire());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), third.as_mut()).await.is_err(),
+            "limit 已满时不应放行"
+        );
+        drop(a);
+        // 释放一个名额后应被唤醒
+        let _c = tokio::time::timeout(Duration::from_secs(1), third)
+            .await
+            .expect("release 后应放行排队者");
+        drop(b);
+    }
+
+    #[tokio::test]
+    async fn gate_set_limit_wakes_waiter_immediately() {
+        let gate = Gate::new(1);
+        let held = gate.acquire().await;
+        let mut waiter = Box::pin(gate.acquire());
+        assert!(tokio::time::timeout(Duration::from_millis(50), waiter.as_mut()).await.is_err());
+        // 调大上限：已排队任务应立刻放行（运行中的不受影响）
+        gate.set_limit(2);
+        let _g = tokio::time::timeout(Duration::from_secs(1), waiter)
+            .await
+            .expect("set_limit 调大后应放行排队者");
+        drop(held);
+    }
+
+    #[test]
+    fn app_state_clamps_concurrency() {
+        let state = AppState::new();
+        state.set_max_concurrency(0);
+        state.set_max_concurrency(999);
+        // 仅验证钳制不 panic；实际 limit 通过后续行为生效
+    }
 }

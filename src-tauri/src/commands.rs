@@ -35,6 +35,13 @@ pub fn list_jobs(state: State<'_, AppState>) -> Result<Vec<JobRecord>, AppError>
     Ok(state.list())
 }
 
+/// 并发上限（设置页）：Rust 侧钳制 1..=10，改完立即生效
+#[tauri::command]
+pub fn set_max_concurrency(state: State<'_, AppState>, n: usize) -> Result<(), AppError> {
+    state.set_max_concurrency(n);
+    Ok(())
+}
+
 #[tauri::command]
 pub fn open_download_location(file_path: String, fallback_dir: String) -> Result<(), AppError> {
     let file = PathBuf::from(file_path);

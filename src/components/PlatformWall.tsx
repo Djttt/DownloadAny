@@ -23,33 +23,50 @@ import weibo from "../assets/Weibo.svg";
 import xTwitter from "../assets/X_Twitter.svg";
 import xiaohongshu from "../assets/Xiaohongshu.svg";
 import youtube from "../assets/YouTube.svg";
+import { t, type TKey } from "../lib/i18n";
 
-const platforms = [
-  { name: "YouTube", logo: youtube },
-  { name: "哔哩哔哩", logo: bilibili },
-  { name: "TikTok", logo: tiktok },
-  { name: "小红书", logo: xiaohongshu },
-  { name: "Instagram", logo: instagram },
-  { name: "Facebook", logo: facebook },
-  { name: "Twitter", logo: twitter },
-  { name: "X", logo: xTwitter },
-  { name: "Threads", logo: threads },
-  { name: "Twitch", logo: twitch },
-  { name: "Vimeo", logo: vimeo },
-  { name: "Dailymotion", logo: dailymotion },
-  { name: "SoundCloud", logo: soundCloud },
-  { name: "Spotify", logo: spotify },
-  { name: "网易云音乐", logo: neteaseCloudMusic },
-  { name: "Suno", logo: suno },
-  { name: "Reddit", logo: reddit },
-  { name: "Pinterest", logo: pinterest },
-  { name: "Snapchat", logo: snapchat },
-  { name: "LinkedIn", logo: linkedIn },
-  { name: "Tumblr", logo: tumblr },
-  { name: "VK", logo: vk },
-  { name: "微博", logo: weibo },
-  { name: "Amazon", logo: amazon },
-] as const;
+interface PlatformEntry {
+  /** 稳定 id：React key 用，避免语言切换影响列表 */
+  id: string;
+  /** 语言中立名称（品牌原名） */
+  name?: string;
+  /** 需本地化的名称（走 i18n 键） */
+  nameKey?: TKey;
+  logo: string;
+}
+
+const platforms: PlatformEntry[] = [
+  { id: "youtube", name: "YouTube", logo: youtube },
+  { id: "bilibili", nameKey: "platform.bilibili", logo: bilibili },
+  { id: "tiktok", name: "TikTok", logo: tiktok },
+  { id: "xiaohongshu", nameKey: "platform.xiaohongshu", logo: xiaohongshu },
+  { id: "instagram", name: "Instagram", logo: instagram },
+  { id: "facebook", name: "Facebook", logo: facebook },
+  { id: "twitter", name: "Twitter", logo: twitter },
+  { id: "x", name: "X", logo: xTwitter },
+  { id: "threads", name: "Threads", logo: threads },
+  { id: "twitch", name: "Twitch", logo: twitch },
+  { id: "vimeo", name: "Vimeo", logo: vimeo },
+  { id: "dailymotion", name: "Dailymotion", logo: dailymotion },
+  { id: "soundcloud", name: "SoundCloud", logo: soundCloud },
+  { id: "spotify", name: "Spotify", logo: spotify },
+  { id: "netease", nameKey: "platform.netease", logo: neteaseCloudMusic },
+  { id: "suno", name: "Suno", logo: suno },
+  { id: "reddit", name: "Reddit", logo: reddit },
+  { id: "pinterest", name: "Pinterest", logo: pinterest },
+  { id: "snapchat", name: "Snapchat", logo: snapchat },
+  { id: "linkedin", name: "LinkedIn", logo: linkedIn },
+  { id: "tumblr", name: "Tumblr", logo: tumblr },
+  { id: "vk", name: "VK", logo: vk },
+  { id: "weibo", nameKey: "platform.weibo", logo: weibo },
+  { id: "amazon", name: "Amazon", logo: amazon },
+];
+
+function platformLabel(p: PlatformEntry): string {
+  if (p.name) return p.name;
+  if (p.nameKey) return t(p.nameKey);
+  return p.id;
+}
 
 export function PlatformWall() {
   const scroller = useRef<HTMLDivElement>(null);
@@ -217,10 +234,10 @@ export function PlatformWall() {
   }
 
   return (
-    <div className="platform-wall" aria-label="支持的平台">
+    <div className="platform-wall" aria-label={t("platform.aria")}>
       <div className="platform-intro">
-        <h2>支持主流音视频平台</h2>
-        <p>粘贴视频链接，即可解析并下载</p>
+        <h2>{t("platform.introTitle")}</h2>
+        <p>{t("platform.introDesc")}</p>
       </div>
       <div className="platform-fade-frame">
         <div
@@ -246,7 +263,7 @@ export function PlatformWall() {
                           {row.map((platform) => (
                             <div
                               className="platform-card"
-                              key={`${cycle}-${rowIndex}-${copy}-${platform.name}`}
+                              key={`${cycle}-${rowIndex}-${copy}-${platform.id}`}
                             >
                               <span className="platform-logo">
                                 <img
@@ -257,7 +274,7 @@ export function PlatformWall() {
                                   decoding="sync"
                                 />
                               </span>
-                              <span>{platform.name}</span>
+                              <span>{platformLabel(platform)}</span>
                             </div>
                           ))}
                         </div>

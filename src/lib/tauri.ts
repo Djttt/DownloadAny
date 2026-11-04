@@ -24,6 +24,8 @@ export const cancelDownload = (jobId: number) =>
 
 export const listJobs = () => invoke<JobRecord[]>("list_jobs");
 
+export const setMaxConcurrency = (n: number) => invoke<void>("set_max_concurrency", { n });
+
 export const openDownloadLocation = (filePath: string, fallbackDir: string) =>
   invoke<void>("open_download_location", { filePath, fallbackDir });
 
