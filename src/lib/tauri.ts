@@ -7,6 +7,7 @@ import type {
   LogLineEvent,
   ProgressEvent,
   ProxyCandidate,
+  SiteTestResult,
   StatusEvent,
   VideoInfo,
 } from "../types";
@@ -34,6 +35,9 @@ export const openDownloadLocation = (filePath: string, fallbackDir: string) =>
 export const dependencyInfo = () => invoke<DependencyInfo>("dependency_info");
 
 export const detectProxy = () => invoke<ProxyCandidate | null>("detect_proxy");
+
+export const testSite = (site: string, proxy: string | null) =>
+  invoke<SiteTestResult>("test_site", { site, proxy });
 
 // ---- events ----
 

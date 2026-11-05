@@ -2304,6 +2304,85 @@ select:focus-visible {
   cursor: default;
 }
 
+/* 网络页：站点连通测试 */
+.net-test-block {
+  margin-top: 22px;
+}
+
+.net-test-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.net-test-head h4 {
+  margin: 0;
+}
+
+.net-test-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--indigo);
+  color: #fff;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.net-test-run:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.net-test-run:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.site-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.site-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.chip-spin {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--hairline);
+  border-top-color: var(--indigo);
+  border-radius: 50%;
+  animation: chip-spin-rotate 0.8s linear infinite;
+}
+
+.chip-spin.light {
+  border-color: rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+}
+
+@keyframes chip-spin-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .about-list {
   display: flex;
   flex-direction: column;
