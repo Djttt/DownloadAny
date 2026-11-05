@@ -43,6 +43,44 @@ pub fn validate_url(url: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+/// 代理 URL 白名单：只放行常见代理 scheme（scheme 前缀天然杜绝"值被当作选项"的注入）
+const PROXY_SCHEMES: &[&str] = &[
+    "http://",
+    "https://",
+    "socks4://",
+    "socks4a://",
+    "socks5://",
+    "socks5h://",
+];
+
+/// 校验并规范化代理 URL；空/None → None（不走代理）。
+/// 规则：长度 ≤ 300、无空白/控制字符、必须带白名单 scheme、去掉 userinfo 后主机非空。
+pub fn validate_proxy(raw: Option<&str>) -> Result<Option<String>, AppError> {
+    let Some(s) = raw.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Ok(None);
+    };
+    let rest = PROXY_SCHEMES
+        .iter()
+        .find(|p| s.starts_with(**p))
+        .map(|p| &s[p.len()..])
+        .ok_or_else(|| {
+            AppError::InvalidProxy("需以 http://、https:// 或 socks4/5:// 开头".into())
+        })?;
+    // userinfo（user:pass@）之后的部分才是主机，必须非空
+    let host = match rest.rsplit_once('@') {
+        Some((_, h)) => h,
+        None => rest,
+    };
+    let ok = s.len() <= 300
+        && !host.is_empty()
+        && !rest.contains("//")
+        && !s.chars().any(|c| c.is_control() || c.is_whitespace());
+    if !ok {
+        return Err(AppError::InvalidProxy("包含非法字符或格式不完整".into()));
+    }
+    Ok(Some(s.to_string()))
+}
+
 /// format_id 校验：
 /// - 哨兵值（最佳/仅音频）直接放行
 /// - 其余必须是本次 probe 结果里出现过的 id，且只含安全字符
@@ -84,6 +122,7 @@ pub fn build_download_args(
     url: &str,
     output_dir: &str,
     ffmpeg_location: Option<&str>,
+    proxy: Option<&str>,
 ) -> Vec<String> {
     let output_template = if cfg!(windows) {
         // Windows 临时分片还会追加格式号、分片号等后缀；限制标题长度避免
@@ -108,6 +147,10 @@ pub fn build_download_args(
     ];
     if cfg!(windows) {
         args.push("--windows-filenames".into());
+    }
+    if let Some(p) = proxy {
+        args.push("--proxy".into());
+        args.push(p.into());
     }
     if let Some(loc) = ffmpeg_location {
         args.push("--ffmpeg-location".into());
@@ -193,7 +236,7 @@ mod tests {
 
     #[test]
     fn best_uses_merged_format_selector() {
-        let args = build_download_args(FMT_BEST, "https://x", "/tmp/o", None);
+        let args = build_download_args(FMT_BEST, "https://x", "/tmp/o", None, None);
         assert!(args.windows(2).any(|w| w[0] == "-f" && w[1] == "bv*+ba/b"));
         assert_eq!(args.last().unwrap(), "https://x");
     }
@@ -202,7 +245,7 @@ mod tests {
     fn resolution_uses_video_and_audio_merge() {
         let id = "__video_1080p__";
         assert!(validate_format(id, &HashSet::new()).is_ok());
-        let args = build_download_args(id, "https://x", "/tmp/o", None);
+        let args = build_download_args(id, "https://x", "/tmp/o", None, None);
         assert!(args.windows(2).any(|w| {
             w[0] == "-f" && w[1] == "bv*[height<=1080]+ba/b[height<=1080]/b"
         }));
@@ -212,21 +255,21 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn windows_uses_safe_bounded_filenames() {
-        let args = build_download_args(FMT_BEST, "https://x", "C:\\Downloads", None);
+        let args = build_download_args(FMT_BEST, "https://x", "C:\\Downloads", None, None);
         assert!(args.contains(&"--windows-filenames".to_string()));
         assert!(args.contains(&"%(title).120B [%(id)s].%(ext)s".to_string()));
     }
 
     #[test]
     fn audio_extraction_mode() {
-        let args = build_download_args(FMT_AUDIO_MP3, "https://x", "/tmp/o", Some("/app/dir"));
+        let args = build_download_args(FMT_AUDIO_MP3, "https://x", "/tmp/o", Some("/app/dir"), None);
         assert!(args.windows(2).any(|w| w[0] == "--ffmpeg-location"));
         assert!(args.contains(&"-x".to_string()));
     }
 
     #[test]
     fn thumbnail_skips_video_download() {
-        let args = build_download_args(FMT_THUMBNAIL, "https://x", "/tmp/o", None);
+        let args = build_download_args(FMT_THUMBNAIL, "https://x", "/tmp/o", None, None);
         assert!(args.contains(&"--skip-download".to_string()));
         assert!(args.contains(&"--write-thumbnail".to_string()));
         assert!(!args.iter().any(|a| a == "-f"), "封面不应带 -f");
@@ -234,11 +277,40 @@ mod tests {
 
     #[test]
     fn subtitles_fetch_all_and_convert() {
-        let args = build_download_args(FMT_SUBTITLES, "https://x", "/tmp/o", None);
+        let args = build_download_args(FMT_SUBTITLES, "https://x", "/tmp/o", None, None);
         for flag in ["--write-subs", "--write-auto-subs", "--convert-subs", "srt"] {
             assert!(args.iter().any(|a| a == flag), "缺少 {flag}");
         }
         assert!(validate_format(FMT_SUBTITLES, &HashSet::new()).is_ok());
         assert!(validate_format(FMT_THUMBNAIL, &HashSet::new()).is_ok());
+    }
+
+    #[test]
+    fn proxy_whitelist() {
+        assert_eq!(validate_proxy(None).unwrap(), None);
+        assert_eq!(validate_proxy(Some("   ")).unwrap(), None);
+        assert_eq!(
+            validate_proxy(Some("http://127.0.0.1:7890")).unwrap().as_deref(),
+            Some("http://127.0.0.1:7890")
+        );
+        assert!(validate_proxy(Some("socks5://127.0.0.1:1080")).is_ok());
+        assert!(validate_proxy(Some("http://user:pass@proxy.example.com:8080")).is_ok());
+        // 缺 scheme / 空主机 / 空白字符 / 注入形态一律拒绝
+        assert!(validate_proxy(Some("127.0.0.1:7890")).is_err());
+        assert!(validate_proxy(Some("http://")).is_err());
+        assert!(validate_proxy(Some("http://a b")).is_err());
+        assert!(validate_proxy(Some("--proxy=evil")).is_err());
+        assert!(validate_proxy(Some("javascript://x")).is_err());
+    }
+
+    #[test]
+    fn download_args_carry_proxy() {
+        let args =
+            build_download_args(FMT_BEST, "https://x", "/tmp/o", None, Some("socks5://127.0.0.1:1080"));
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "--proxy" && w[1] == "socks5://127.0.0.1:1080"));
+        let args = build_download_args(FMT_BEST, "https://x", "/tmp/o", None, None);
+        assert!(!args.iter().any(|a| a == "--proxy"));
     }
 }

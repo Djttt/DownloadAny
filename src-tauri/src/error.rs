@@ -8,6 +8,8 @@ pub enum AppError {
     InvalidUrl,
     #[error("无效格式：{0}")]
     InvalidFormat(String),
+    #[error("无效代理：{0}")]
+    InvalidProxy(String),
     #[error("未找到 yt-dlp，请先安装或运行 `node scripts/fetch-binaries.mjs`")]
     YtDlpNotFound,
     #[error("探测超时（60s），请检查网络后重试")]

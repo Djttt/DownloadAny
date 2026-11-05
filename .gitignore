@@ -28,3 +28,4 @@ src-tauri/binaries/
 
 # Claude Code 会话数据
 .claude/
+.env

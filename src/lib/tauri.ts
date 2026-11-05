@@ -6,6 +6,7 @@ import type {
   JobRecord,
   LogLineEvent,
   ProgressEvent,
+  ProxyCandidate,
   StatusEvent,
   VideoInfo,
 } from "../types";
@@ -14,7 +15,8 @@ export type { UnlistenFn };
 
 // ---- commands ----
 
-export const probeVideo = (url: string) => invoke<VideoInfo>("probe_video", { url });
+export const probeVideo = (url: string, proxy: string | null) =>
+  invoke<VideoInfo>("probe_video", { url, proxy });
 
 export const enqueueDownload = (options: DownloadOptions) =>
   invoke<number>("enqueue_download", { options });
@@ -30,6 +32,8 @@ export const openDownloadLocation = (filePath: string, fallbackDir: string) =>
   invoke<void>("open_download_location", { filePath, fallbackDir });
 
 export const dependencyInfo = () => invoke<DependencyInfo>("dependency_info");
+
+export const detectProxy = () => invoke<ProxyCandidate | null>("detect_proxy");
 
 // ---- events ----
 

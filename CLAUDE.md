@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 DownloadAny：基于 Tauri v2 + yt-dlp 的跨平台桌面视频下载器（v1 = 核心下载）。
 
-核心原则：**yt-dlp/FFmpeg 是无状态计算引擎（sidecar 进程），Rust 只做瘦编排层，UI 不接触命令行，下载逻辑不进渲染层。** v1 明确不做：SQLite 队列持久化、播放列表、字幕/SponsorBlock、代理/Cookie、安装包签名。
+核心原则：**yt-dlp/FFmpeg 是无状态计算引擎（sidecar 进程），Rust 只做瘦编排层，UI 不接触命令行，下载逻辑不进渲染层。** v1 明确不做：SQLite 队列持久化、播放列表、SponsorBlock、Cookie、安装包签名（代理已接通：设置页偏好 → DownloadOptions/`probe_video` → `--proxy`）。
 
 ## 常用命令
 
@@ -39,11 +39,11 @@ React UI  ──invoke──▶  Rust commands  ──spawn (tokio::process)─�
 
 Rust 侧（`src-tauri/src/`，一模块一职责）：
 
-- `resolve.rs` — 二进制三级解析；`args.rs` — DownloadOptions → argv 白名单拼装（format_id 必须在本次 probe 结果集合或两个哨兵 `__best__`/`__audio_mp3__` 中；URL 必须 http(s) 开头。spawn 传数组，天然免疫 shell 注入）
+- `resolve.rs` — 二进制三级解析；`args.rs` — DownloadOptions → argv 白名单拼装（format_id 必须在本次 probe 结果集合或两个哨兵 `__best__`/`__audio_mp3__` 中；URL 必须 http(s) 开头；代理 URL 必须带 http/https/socks4/5 scheme 前缀且无空白，probe 与 download 两条路径都透传 `--proxy`。spawn 传数组，天然免疫 shell 注入）
 - `probe.rs` — `yt-dlp -J --no-playlist` 探测，把原始 formats 折叠成人读选项（合成哨兵不暴露 yt-dlp 表达式）
 - `progress.rs` — 解析 `--progress-template` 输出的竖线协议：`PROGRESS|percent|downloaded|total|total_estimate|speed|eta`，未知值 yt-dlp 打印 `None`/`NA` 而非 JSON null，因此不用 JSON。进度行实测出现在 **stdout**（stderr 同时消费）
 - `queue.rs` — 任务状态机：`AppState`(Arc<Inner>) + Semaphore(3) 并发、`CommandChild` 无（自持 pid）、取消走进程组终止（Unix `process_group(0)` + `kill -TERM/-9 -<pgid>`，杀到 FFmpeg 孙进程；Windows `taskkill /T /F`）、120s 静默看门狗、探测结果 format_id 白名单缓存
-- `commands.rs` — 唯一 IPC 面：`probe_video` / `enqueue_download` / `cancel_download` / `list_jobs` / `dependency_info`
+- `commands.rs` — 唯一 IPC 面：`probe_video`（带 proxy 参数） / `enqueue_download` / `cancel_download` / `list_jobs` / `dependency_info` / `set_max_concurrency` / `detect_proxy`（TCP 连通性探测本机常见代理端口，仅作填充建议）
 - `error.rs` — `AppError`（thiserror），序列化为字符串直接给前端展示
 
 前端（`src/`）：

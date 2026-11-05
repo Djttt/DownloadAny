@@ -75,4 +75,13 @@ export interface DownloadOptions {
   outputDir: string;
   title?: string | null;
   formatLabel?: string | null;
+  /** 代理 URL（含 scheme，由 settings.buildProxyUrl 组装）；null = 不走代理 */
+  proxy?: string | null;
+}
+
+// ---- detect_proxy 返回（镜像 Rust ProxyCandidate）----
+
+export interface ProxyCandidate {
+  proxyType: string;
+  addr: string;
 }
