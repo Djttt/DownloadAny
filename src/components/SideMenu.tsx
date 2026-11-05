@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { getVersion } from "@tauri-apps/api/app";
-import { dependencyInfo, detectProxy } from "../lib/tauri";
+import { dependencyInfo, detectProxy, testSite } from "../lib/tauri";
 import type { DependencyInfo } from "../types";
 import {
   CONCURRENCY_MAX,
@@ -698,6 +698,53 @@ const PROXY_KEYS: Record<ProxyType, "proxy.none" | "proxy.http" | "proxy.socks5"
   socks5: "proxy.socks5",
 };
 
+// 站点 id 必须与 Rust nettest::TEST_SITES 白名单一致,label 为专名不随语言翻译
+const NET_TEST_SITES: { id: string; label: string }[] = [
+  { id: "youtube", label: "YouTube" },
+  { id: "twitter", label: "Twitter" },
+  { id: "instagram", label: "Instagram" },
+  { id: "baidu", label: "Baidu" },
+];
+
+type SiteState = "idle" | "busy" | "ok" | "fail";
+
+function SiteStatusIcon({ state }: { state: SiteState }) {
+  if (state === "ok") {
+    return (
+      <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden>
+        <circle cx="7" cy="7" r="7" fill="var(--green)" />
+        <path
+          d="m4.1 7.2 2 2 3.8-4.4"
+          stroke="#fff"
+          strokeWidth="1.6"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+  if (state === "fail") {
+    return (
+      <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden>
+        <circle cx="7" cy="7" r="7" fill="var(--red)" />
+        <path
+          d="M4.9 4.9l4.2 4.2M9.1 4.9l-4.2 4.2"
+          stroke="#fff"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  if (state === "busy") return <span className="chip-spin" aria-hidden />;
+  return (
+    <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden>
+      <circle cx="7" cy="7" r="5.6" fill="none" stroke="currentColor" strokeWidth="1.6" opacity=".25" />
+    </svg>
+  );
+}
+
 function NetworkPane({
   proxyType,
   proxyAddr,
@@ -713,6 +760,28 @@ function NetworkPane({
   useEffect(() => setDraft(proxyAddr), [proxyAddr]);
 
   const activeUrl = buildProxyUrl(proxyType, proxyAddr);
+
+  // 网络测试：4 站点并行，结果逐站点亮（invoke 内现取当前代理设置）
+  const [siteStatus, setSiteStatus] = useState<Record<string, SiteState>>({});
+  const [siteError, setSiteError] = useState<Record<string, string>>({});
+  const testing = NET_TEST_SITES.some((s) => siteStatus[s.id] === "busy");
+
+  function runNetTest() {
+    const url = activeUrl;
+    setSiteStatus(Object.fromEntries(NET_TEST_SITES.map((s) => [s.id, "busy" as SiteState])));
+    setSiteError({});
+    for (const { id } of NET_TEST_SITES) {
+      testSite(id, url)
+        .then((r) => {
+          setSiteStatus((prev) => ({ ...prev, [id]: r.ok ? "ok" : "fail" }));
+          if (!r.ok && r.error) setSiteError((prev) => ({ ...prev, [id]: r.error as string }));
+        })
+        .catch((e) => {
+          setSiteStatus((prev) => ({ ...prev, [id]: "fail" }));
+          setSiteError((prev) => ({ ...prev, [id]: String(e) }));
+        });
+    }
+  }
 
   async function handleDetect() {
     setDetect("busy");
@@ -781,6 +850,31 @@ function NetworkPane({
             ? t("set.proxyInactive")
             : t("set.proxyAddrMissing")}
       </p>
+      <div className="setting-block net-test-block">
+        <div className="net-test-head">
+          <h4>{t("set.netTestTitle")}</h4>
+          <button className="net-test-run" type="button" disabled={testing} onClick={runNetTest}>
+            {testing && <span className="chip-spin light" aria-hidden />}
+            {testing ? t("set.netTestRunning") : t("set.netTestStart")}
+          </button>
+        </div>
+        <div className="site-chips">
+          {NET_TEST_SITES.map((s) => {
+            const st = siteStatus[s.id] ?? "idle";
+            return (
+              <span
+                className="site-chip"
+                key={s.id}
+                title={st === "fail" ? siteError[s.id] : undefined}
+              >
+                {s.label}
+                <SiteStatusIcon state={st} />
+              </span>
+            );
+          })}
+        </div>
+        <p className="setting-note">{t("set.netTestNote")}</p>
+      </div>
     </>
   );
 }

@@ -2,6 +2,7 @@
 
 use crate::args;
 use crate::error::AppError;
+use crate::nettest;
 use crate::probe::VideoInfo;
 use crate::queue::{self, AppState, DownloadOptions, JobRecord};
 use crate::resolve;
@@ -79,6 +80,21 @@ pub async fn detect_proxy() -> Option<ProxyCandidate> {
         }
     }
     None
+}
+
+/// 网络测试：对 site 白名单（nettest::TEST_SITES）经当前代理或直连做 CONNECT 探测。
+/// 永不返回 Err——失败信息(含耗时)装进 SiteTestResult，前端逐站点点亮状态。
+#[tauri::command]
+pub async fn test_site(site: String, proxy: Option<String>) -> nettest::SiteTestResult {
+    let proxy = match args::validate_proxy(proxy.as_deref()) {
+        Ok(p) => p,
+        Err(e) => return nettest::SiteTestResult {
+            ok: false,
+            error: Some(e.to_string()),
+            latency_ms: 0,
+        },
+    };
+    nettest::probe_site(&site, proxy.as_deref()).await
 }
 
 #[tauri::command]

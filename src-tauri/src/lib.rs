@@ -1,6 +1,7 @@
 mod args;
 mod commands;
 mod error;
+mod nettest;
 mod probe;
 mod progress;
 mod queue;
@@ -27,7 +28,8 @@ pub fn run() {
             commands::set_max_concurrency,
             commands::open_download_location,
             commands::dependency_info,
-            commands::detect_proxy
+            commands::detect_proxy,
+            commands::test_site
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -85,3 +85,11 @@ export interface ProxyCandidate {
   proxyType: string;
   addr: string;
 }
+
+// ---- test_site 返回（镜像 Rust SiteTestResult）----
+
+export interface SiteTestResult {
+  ok: boolean;
+  error?: string | null;
+  latencyMs: number;
+}
