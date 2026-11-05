@@ -2,14 +2,13 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { getVersion } from "@tauri-apps/api/app";
-import { dependencyInfo } from "../lib/tauri";
+import { dependencyInfo, detectProxy } from "../lib/tauri";
 import type { DependencyInfo } from "../types";
 import {
   CONCURRENCY_MAX,
   CONCURRENCY_MIN,
-  loadProxyType,
+  buildProxyUrl,
   saveLangPref,
-  saveProxyType,
   type ProxyType,
 } from "../lib/settings";
 import { getLangPref, setLangPref, t, type LangPref } from "../lib/i18n";
@@ -555,18 +554,24 @@ export function SettingsModal({
   autoMode,
   autoDisabled,
   maxConcurrency,
+  proxyType,
+  proxyAddr,
   onPickDir,
   onToggleAuto,
   onSetMaxConcurrency,
+  onSetProxy,
   onClose,
 }: {
   outputDir: string;
   autoMode: boolean;
   autoDisabled: boolean;
   maxConcurrency: number;
+  proxyType: ProxyType;
+  proxyAddr: string;
   onPickDir: () => void;
   onToggleAuto: (v: boolean) => void;
   onSetMaxConcurrency: (n: number) => void;
+  onSetProxy: (type: ProxyType, addr: string) => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<SettingsTab>("general");
@@ -675,7 +680,9 @@ export function SettingsModal({
               </div>
             </>
           )}
-          {tab === "network" && <NetworkPane />}
+          {tab === "network" && (
+            <NetworkPane proxyType={proxyType} proxyAddr={proxyAddr} onSetProxy={onSetProxy} />
+          )}
           {tab === "about" && <AboutPane />}
         </div>
       </div>
@@ -683,7 +690,7 @@ export function SettingsModal({
   );
 }
 
-/* ---- 网络页:代理偏好暂存(未接下载引擎) ---- */
+/* ---- 网络页:代理设置(已经由 DownloadOptions/probe_video 接通下载引擎) ---- */
 
 const PROXY_KEYS: Record<ProxyType, "proxy.none" | "proxy.http" | "proxy.socks5"> = {
   none: "proxy.none",
@@ -691,15 +698,37 @@ const PROXY_KEYS: Record<ProxyType, "proxy.none" | "proxy.http" | "proxy.socks5"
   socks5: "proxy.socks5",
 };
 
-function NetworkPane() {
-  const [proxy, setProxy] = useState<ProxyType>("none");
-  useEffect(() => {
-    loadProxyType().then(setProxy).catch(() => {});
-  }, []);
+function NetworkPane({
+  proxyType,
+  proxyAddr,
+  onSetProxy,
+}: {
+  proxyType: ProxyType;
+  proxyAddr: string;
+  onSetProxy: (type: ProxyType, addr: string) => void;
+}) {
+  // 输入框本地草稿：onBlur / Enter 才提交，避免每敲一个字符写一次 store
+  const [draft, setDraft] = useState(proxyAddr);
+  const [detect, setDetect] = useState<"idle" | "busy" | "none">("idle");
+  useEffect(() => setDraft(proxyAddr), [proxyAddr]);
 
-  function change(v: ProxyType) {
-    setProxy(v);
-    saveProxyType(v).catch(() => {});
+  const activeUrl = buildProxyUrl(proxyType, proxyAddr);
+
+  async function handleDetect() {
+    setDetect("busy");
+    try {
+      const found = await detectProxy();
+      if (found) {
+        const type = found.proxyType === "socks5" ? "socks5" : "http";
+        setDraft(found.addr);
+        onSetProxy(type, found.addr);
+        setDetect("idle");
+      } else {
+        setDetect("none");
+      }
+    } catch {
+      setDetect("none");
+    }
   }
 
   return (
@@ -708,8 +737,8 @@ function NetworkPane() {
         <h4>{t("set.proxyLabel")}</h4>
         <select
           className="select"
-          value={proxy}
-          onChange={(e) => change(e.target.value as ProxyType)}
+          value={proxyType}
+          onChange={(e) => onSetProxy(e.target.value as ProxyType, draft)}
           aria-label={t("set.proxyLabel")}
         >
           {(Object.keys(PROXY_KEYS) as ProxyType[]).map((k) => (
@@ -719,7 +748,39 @@ function NetworkPane() {
           ))}
         </select>
       </div>
+      {proxyType !== "none" && (
+        <div className="setting-block">
+          <h4>{t("set.proxyAddrLabel")}</h4>
+          <div className="proxy-row">
+            <input
+              className="text-input"
+              type="text"
+              value={draft}
+              placeholder={t("set.proxyAddrPlaceholder")}
+              spellCheck={false}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                setDetect("idle");
+              }}
+              onBlur={() => draft.trim() !== proxyAddr && onSetProxy(proxyType, draft)}
+              onKeyDown={(e) => e.key === "Enter" && onSetProxy(proxyType, draft)}
+              aria-label={t("set.proxyAddrLabel")}
+            />
+            <button className="chg" type="button" disabled={detect === "busy"} onClick={handleDetect}>
+              {detect === "busy" ? t("set.proxyDetecting") : t("set.proxyDetect")}
+            </button>
+          </div>
+          {detect === "none" && <p className="setting-note">{t("set.proxyDetectNone")}</p>}
+        </div>
+      )}
       <p className="setting-note">{t("set.proxyNote")}</p>
+      <p className="setting-note">
+        {activeUrl
+          ? t("set.proxyEffective", { url: activeUrl })
+          : proxyType === "none"
+            ? t("set.proxyInactive")
+            : t("set.proxyAddrMissing")}
+      </p>
     </>
   );
 }

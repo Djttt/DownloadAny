@@ -55,7 +55,7 @@ export async function saveLangPref(p: LangPref): Promise<void> {
   (await store()).set("langPref", p);
 }
 
-/** 代理类型：当前仅保存偏好，尚未与 yt-dlp 引擎接通 */
+/** 代理偏好：类型 + 地址，组装后经 DownloadOptions/probe 传入下载引擎 */
 export type ProxyType = "none" | "http" | "socks5";
 
 export async function loadProxyType(): Promise<ProxyType> {
@@ -66,4 +66,21 @@ export async function loadProxyType(): Promise<ProxyType> {
 
 export async function saveProxyType(p: ProxyType): Promise<void> {
   (await store()).set("proxyType", p);
+}
+
+export async function loadProxyAddr(): Promise<string> {
+  const s = await store();
+  return (await s.get<string>("proxyAddr")) ?? "";
+}
+
+export async function saveProxyAddr(a: string): Promise<void> {
+  (await store()).set("proxyAddr", a);
+}
+
+/** 地址已是完整 URL 则原样使用，否则按类型补 scheme；类型 none 或地址为空 → 不走代理 */
+export function buildProxyUrl(type: ProxyType, addr: string): string | null {
+  if (type === "none") return null;
+  const a = addr.trim();
+  if (!a) return null;
+  return /^(https?|socks[45]a?h?):\/\//i.test(a) ? a : `${type}://${a}`;
 }

@@ -149,6 +149,8 @@ pub struct DownloadOptions {
     /// 展示用元数据（来自前端已探测的结果，不参与命令拼装）
     pub title: Option<String>,
     pub format_label: Option<String>,
+    /// 代理 URL（已含 scheme），None/空 = 不走代理；args.rs 白名单校验后传 --proxy
+    pub proxy: Option<String>,
 }
 
 struct JobControl {
@@ -239,6 +241,7 @@ impl AppState {
 /// 入队：校验参数 → 建任务记录 → spawn 异步执行（内部等 permit 限并发）
 pub async fn enqueue(app: &AppHandle, state: &AppState, opts: DownloadOptions) -> Result<u64, AppError> {
     args::validate_url(&opts.url)?;
+    args::validate_proxy(opts.proxy.as_deref())?;
     state.validate_format(&opts.url, &opts.format_id)?;
     tokio::fs::create_dir_all(&opts.output_dir).await?;
 
@@ -374,11 +377,24 @@ async fn run_job(app: AppHandle, state: AppState, id: u64, opts: DownloadOptions
     }
 
     // ---- 组装并启动进程 ----
+    // 代理在 argv 拼装边界再过一次白名单（入队已校验，这里是纵深防御）
+    let proxy = match args::validate_proxy(opts.proxy.as_deref()) {
+        Ok(p) => p,
+        Err(e) => {
+            finish(&app, &state, id, JobStatus::Failed, Some(e.to_string()));
+            return;
+        }
+    };
     let yt_dlp = resolve::yt_dlp();
     let ffmpeg = resolve::ffmpeg();
     let ffmpeg_loc = ffmpeg.ffmpeg_location();
-    let cmd_args =
-        args::build_download_args(&opts.format_id, &opts.url, &opts.output_dir, ffmpeg_loc.as_deref());
+    let cmd_args = args::build_download_args(
+        &opts.format_id,
+        &opts.url,
+        &opts.output_dir,
+        ffmpeg_loc.as_deref(),
+        proxy.as_deref(),
+    );
 
     let mut cmd = yt_dlp.command();
     cmd.args(&cmd_args)
@@ -529,8 +545,12 @@ fn extract_destination(line: &str) -> Option<String> {
 }
 
 /// probe 的薄封装：探测并把 format_id 集合存入白名单缓存
-pub async fn probe_and_cache(url: &str, state: &AppState) -> Result<probe::VideoInfo, AppError> {
-    let result = probe::probe(url).await?;
+pub async fn probe_and_cache(
+    url: &str,
+    proxy: Option<&str>,
+    state: &AppState,
+) -> Result<probe::VideoInfo, AppError> {
+    let result = probe::probe(url, proxy).await?;
     state.cache_probe_ids(url, result.valid_ids);
     Ok(result.info)
 }

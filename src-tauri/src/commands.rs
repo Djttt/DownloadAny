@@ -10,10 +10,15 @@ use std::path::{Path, PathBuf};
 use tauri::{AppHandle, State};
 
 #[tauri::command]
-pub async fn probe_video(state: State<'_, AppState>, url: String) -> Result<VideoInfo, AppError> {
+pub async fn probe_video(
+    state: State<'_, AppState>,
+    url: String,
+    proxy: Option<String>,
+) -> Result<VideoInfo, AppError> {
     let url = url.trim().to_string();
     args::validate_url(&url)?;
-    queue::probe_and_cache(&url, &state).await
+    let proxy = args::validate_proxy(proxy.as_deref())?;
+    queue::probe_and_cache(&url, proxy.as_deref(), &state).await
 }
 
 #[tauri::command]
@@ -28,6 +33,52 @@ pub async fn enqueue_download(
 #[tauri::command]
 pub fn cancel_download(state: State<'_, AppState>, job_id: u64) -> Result<(), AppError> {
     queue::cancel(&state, job_id)
+}
+
+/// 设置页"自动探测本地代理"返回的候选端点
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ProxyCandidate {
+    pub proxy_type: String,
+    pub addr: String,
+}
+
+/// 本机常见代理监听端口（TCP 连通即视为候选，存在误报可能，故仅作填充建议）。
+/// 顺序 = 优先级：Clash 系 mixed 端口在前，纯 SOCKS 端口在后。
+const PROXY_CANDIDATES: &[(&str, u16, &str)] = &[
+    ("127.0.0.1", 7890, "http"),   // Clash / Clash for Windows
+    ("127.0.0.1", 7897, "http"),   // Clash Verge mixed
+    ("127.0.0.1", 10808, "http"),  // v2rayN / xray http
+    ("127.0.0.1", 10809, "http"),  // v2rayN / xray mixed
+    ("127.0.0.1", 8118, "http"),   // privoxy
+    ("127.0.0.1", 8888, "http"),
+    ("127.0.0.1", 3128, "http"),   // squid
+    ("127.0.0.1", 7891, "socks5"), // Clash socks
+    ("127.0.0.1", 7898, "socks5"), // Clash Verge socks
+    ("127.0.0.1", 1080, "socks5"),
+    ("127.0.0.1", 1086, "socks5"),
+];
+
+/// 逐个 TCP 连接候选端口（300ms 超时），返回第一个连通者。
+/// 串行最坏 ~3s，但只探测回环地址，连通失败通常立刻返回 refused。
+#[tauri::command]
+pub async fn detect_proxy() -> Option<ProxyCandidate> {
+    for (host, port, kind) in PROXY_CANDIDATES {
+        let connected = tokio::time::timeout(
+            std::time::Duration::from_millis(300),
+            tokio::net::TcpStream::connect((*host, *port)),
+        )
+        .await
+        .map(|r| r.is_ok())
+        .unwrap_or(false);
+        if connected {
+            return Some(ProxyCandidate {
+                proxy_type: (*kind).into(),
+                addr: format!("{host}:{port}"),
+            });
+        }
+    }
+    None
 }
 
 #[tauri::command]

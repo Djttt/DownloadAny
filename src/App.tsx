@@ -16,13 +16,19 @@ import {
   CONCURRENCY_DEFAULT,
   CONCURRENCY_MAX,
   CONCURRENCY_MIN,
+  buildProxyUrl,
   loadAutoMode,
   loadLangPref,
   loadMaxConcurrency,
   loadOutputDir,
+  loadProxyAddr,
+  loadProxyType,
   saveAutoMode,
   saveMaxConcurrency,
   saveOutputDir,
+  saveProxyAddr,
+  saveProxyType,
+  type ProxyType,
 } from "./lib/settings";
 import { setLangPref, t, useLang } from "./lib/i18n";
 import { UrlBar } from "./components/UrlBar";
@@ -56,6 +62,10 @@ function App() {
   const [outputDir, setOutputDir] = useState("");
   const [autoMode, setAutoMode] = useState(false);
   const [maxConcurrency, setMaxConcurrencyState] = useState(CONCURRENCY_DEFAULT);
+  const [proxyType, setProxyTypeState] = useState<ProxyType>("none");
+  const [proxyAddr, setProxyAddrState] = useState("");
+  // 组装一次、两处消费：probeVideo 与 enqueueDownload 都带上，探测/下载走同一代理
+  const proxyUrl = buildProxyUrl(proxyType, proxyAddr);
   const [autoJobIds, setAutoJobIds] = useState<number[]>([]);
   const [autoCancelling, setAutoCancelling] = useState(false);
   const autoCancelRequested = useRef(false);
@@ -67,16 +77,20 @@ function App() {
       try {
         const existing = await listJobs();
         if (existing.length) setJobs(Object.fromEntries(existing.map((j) => [j.id, j])));
-        const [dir, auto, conc, lang] = await Promise.all([
+        const [dir, auto, conc, lang, pType, pAddr] = await Promise.all([
           loadOutputDir(),
           loadAutoMode(),
           loadMaxConcurrency(),
           loadLangPref(),
+          loadProxyType(),
+          loadProxyAddr(),
         ]);
         setOutputDir(dir);
         setAutoMode(auto);
         setLangPref(lang);
         setMaxConcurrencyState(conc);
+        setProxyTypeState(pType);
+        setProxyAddrState(pAddr);
         await setMaxConcurrency(conc); // 把持久化的偏好推给 Rust 队列
       } catch (e) {
         console.error(e);
@@ -152,7 +166,7 @@ function App() {
           const url = pending.shift();
           if (!url) break;
           try {
-            const info = await probeVideo(url);
+            const info = await probeVideo(url, proxyUrl);
             if (autoMode && info.formats[0]) {
               if (autoCancelRequested.current) continue;
               const id = await enqueue(info.formats[0], url, info.title);
@@ -194,6 +208,7 @@ function App() {
         outputDir,
         title,
         formatLabel: format.label,
+        proxy: proxyUrl,
       });
       upsert(id, {
         url,
@@ -225,6 +240,14 @@ function App() {
   function toggleAuto(v: boolean) {
     setAutoMode(v);
     saveAutoMode(v).catch(console.error);
+  }
+
+  /** 代理偏好：状态 → 持久化；下次解析/下载即生效（invoke 时现取 proxyUrl） */
+  function applyProxy(type: ProxyType, addr: string) {
+    setProxyTypeState(type);
+    setProxyAddrState(addr);
+    saveProxyType(type).catch(() => {});
+    saveProxyAddr(addr).catch(() => {});
   }
 
   /** 并发上限：钳制 → 状态 → 持久化 → 推给 Rust 立即生效 */
@@ -407,9 +430,12 @@ function App() {
           autoMode={autoMode}
           autoDisabled={busy || autoDownloadActive}
           maxConcurrency={maxConcurrency}
+          proxyType={proxyType}
+          proxyAddr={proxyAddr}
           onPickDir={pickDir}
           onToggleAuto={toggleAuto}
           onSetMaxConcurrency={applyMaxConcurrency}
+          onSetProxy={applyProxy}
           onClose={() => setDialog(null)}
         />
       )}

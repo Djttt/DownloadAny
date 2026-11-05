@@ -35,19 +35,19 @@ pub struct ProbeResult {
     pub valid_ids: HashSet<String>,
 }
 
-pub async fn probe(url: &str) -> Result<ProbeResult, AppError> {
+pub async fn probe(url: &str, proxy: Option<&str>) -> Result<ProbeResult, AppError> {
     let program = resolve::yt_dlp();
     let mut cmd = program.command();
-    cmd.args([
-        "-J",
-        "--no-playlist",
-        "--no-warnings",
-        "--no-colors",
-        url,
-    ])
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
-    .kill_on_drop(true);
+    let mut argv: Vec<&str> = vec!["-J", "--no-playlist", "--no-warnings", "--no-colors"];
+    // 探测与下载走同一代理，否则会出现"探测成功但下载连不上"（或反之）的割裂体验
+    if let Some(p) = proxy {
+        argv.extend(["--proxy", p]);
+    }
+    argv.push(url);
+    cmd.args(argv)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
 
     let output = tokio::time::timeout(Duration::from_secs(60), cmd.output())
         .await

@@ -2252,6 +2252,58 @@ select:focus-visible {
   line-height: 1.6;
 }
 
+/* 网络页：代理地址输入 + 本地探测按钮 */
+.proxy-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.proxy-row .text-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.proxy-row .text-input::placeholder {
+  color: #a1a1aa;
+}
+
+.proxy-row .text-input:focus {
+  outline: none;
+  border-color: var(--indigo);
+  box-shadow: 0 0 0 2px rgba(0, 82, 217, 0.1);
+}
+
+.proxy-row .chg {
+  flex-shrink: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.proxy-row .chg:hover:not(:disabled) {
+  border-color: var(--indigo);
+  color: var(--indigo);
+}
+
+.proxy-row .chg:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .about-list {
   display: flex;
   flex-direction: column;
