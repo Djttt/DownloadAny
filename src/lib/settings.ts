@@ -1,6 +1,7 @@
 import { load } from "@tauri-apps/plugin-store";
 import { downloadDir } from "@tauri-apps/api/path";
 import type { LangPref } from "./i18n";
+import type { ThemePref } from "./theme";
 
 async function store() {
   return load("settings.json", { autoSave: true });
@@ -53,6 +54,17 @@ export async function loadLangPref(): Promise<LangPref> {
 
 export async function saveLangPref(p: LangPref): Promise<void> {
   (await store()).set("langPref", p);
+}
+
+/** 界面主题偏好：system / light / dark（配色生效见 lib/theme.ts） */
+export async function loadThemePref(): Promise<ThemePref> {
+  const s = await store();
+  const v = await s.get<string>("themePref");
+  return v === "light" || v === "dark" ? v : "system";
+}
+
+export async function saveThemePref(p: ThemePref): Promise<void> {
+  (await store()).set("themePref", p);
 }
 
 /** 代理偏好：类型 + 地址，组装后经 DownloadOptions/probe 传入下载引擎 */

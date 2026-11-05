@@ -23,6 +23,7 @@ import {
   loadOutputDir,
   loadProxyAddr,
   loadProxyType,
+  loadThemePref,
   saveAutoMode,
   saveMaxConcurrency,
   saveOutputDir,
@@ -31,6 +32,7 @@ import {
   type ProxyType,
 } from "./lib/settings";
 import { setLangPref, t, useLang } from "./lib/i18n";
+import { setThemePref } from "./lib/theme";
 import { UrlBar } from "./components/UrlBar";
 import { FormatBar } from "./components/VideoCard";
 import { QueueList } from "./components/QueueList";
@@ -77,17 +79,19 @@ function App() {
       try {
         const existing = await listJobs();
         if (existing.length) setJobs(Object.fromEntries(existing.map((j) => [j.id, j])));
-        const [dir, auto, conc, lang, pType, pAddr] = await Promise.all([
+        const [dir, auto, conc, lang, pType, pAddr, theme] = await Promise.all([
           loadOutputDir(),
           loadAutoMode(),
           loadMaxConcurrency(),
           loadLangPref(),
           loadProxyType(),
           loadProxyAddr(),
+          loadThemePref(),
         ]);
         setOutputDir(dir);
         setAutoMode(auto);
         setLangPref(lang);
+        setThemePref(theme);
         setMaxConcurrencyState(conc);
         setProxyTypeState(pType);
         setProxyAddrState(pAddr);

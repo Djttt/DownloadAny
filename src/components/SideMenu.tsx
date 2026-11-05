@@ -9,9 +9,11 @@ import {
   CONCURRENCY_MIN,
   buildProxyUrl,
   saveLangPref,
+  saveThemePref,
   type ProxyType,
 } from "../lib/settings";
 import { getLangPref, setLangPref, t, type LangPref } from "../lib/i18n";
+import { getThemePref, setThemePref, type ThemePref } from "../lib/theme";
 import { logout, restoreUser, type AuthUser } from "../lib/auth";
 import { AuthModal } from "./AuthModal";
 
@@ -576,11 +578,18 @@ export function SettingsModal({
 }) {
   const [tab, setTab] = useState<SettingsTab>("general");
   const [langPref, setLangPrefState] = useState<LangPref>(getLangPref());
+  const [themePref, setThemePrefState] = useState<ThemePref>(getThemePref());
 
   function changeLang(p: LangPref) {
     setLangPrefState(p);
     setLangPref(p);
     saveLangPref(p).catch(() => {});
+  }
+
+  function changeTheme(p: ThemePref) {
+    setThemePrefState(p);
+    setThemePref(p);
+    saveThemePref(p).catch(() => {});
   }
 
   return (
@@ -624,6 +633,19 @@ export function SettingsModal({
                   <option value="system">{t("lang.system")}</option>
                   <option value="zh">{t("lang.zh")}</option>
                   <option value="en">{t("lang.en")}</option>
+                </select>
+              </div>
+              <div className="setting-block">
+                <h4>{t("set.themeLabel")}</h4>
+                <select
+                  className="select"
+                  value={themePref}
+                  onChange={(e) => changeTheme(e.target.value as ThemePref)}
+                  aria-label={t("set.themeLabel")}
+                >
+                  <option value="system">{t("theme.system")}</option>
+                  <option value="light">{t("theme.light")}</option>
+                  <option value="dark">{t("theme.dark")}</option>
                 </select>
               </div>
               <div className="setting-block">
