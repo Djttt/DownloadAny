@@ -13,6 +13,8 @@ import {
   type ProxyType,
 } from "../lib/settings";
 import { getLangPref, setLangPref, t, type LangPref } from "../lib/i18n";
+import { logout, restoreUser, type AuthUser } from "../lib/auth";
+import { AuthModal } from "./AuthModal";
 
 /* ========================================================================
  * 侧栏功能菜单:联系客服(悬停飞窗)/ 问题反馈(弹窗)/ 设置(弹窗)
@@ -191,20 +193,26 @@ export function SupportMenuItem() {
   );
 }
 
-/* ---- 账户入口:未登录点击=占位登录;已登录悬停弹出账户卡片 ---- */
-
-// TODO: 接入真实登录后移除 —— 目前以本地占位账号模拟已登录态(内存态,重启即退登)
-const PLACEHOLDER_USER = { name: "admin", email: "admin@example.com" } as const;
+/* ---- 账户入口:未登录打开登录窗口;已登录悬停弹出账户卡片 ---- */
 
 export function AccountMenuItem() {
-  const [loggedIn, setLoggedIn] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authOpen, setAuthOpen] = useState(false);
   const [open, setOpen] = useState(false);
-  const [pwdOpen, setPwdOpen] = useState(false);
   const [anchor, setAnchor] = useState<{ left: number; bottom: number } | null>(null);
   const entryRef = useRef<HTMLButtonElement>(null);
   const closeTimer = useRef(0);
 
-  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+  useEffect(() => {
+    let alive = true;
+    restoreUser().then((restored) => alive && setUser(restored)).catch(() => {});
+    return () => {
+      alive = false;
+      window.clearTimeout(closeTimer.current);
+    };
+  }, []);
+
+  const displayName = user?.email.split("@")[0] ?? "";
 
   // 卡片经 portal 渲染在 body 层(不受 .side/.platform-rows 层叠影响)，按条目 rect 定位到其右上方
   function showCard() {
@@ -237,12 +245,10 @@ export function AccountMenuItem() {
         className="account-entry"
         type="button"
         aria-label={t("account.aria")}
-        title={loggedIn ? undefined : t("account.title")}
-        onMouseEnter={loggedIn ? showCard : undefined}
-        onMouseLeave={loggedIn ? scheduleClose : undefined}
-        onClick={() => {
-          if (!loggedIn) setLoggedIn(true); // 占位:点击即"登录"
-        }}
+        title={user ? undefined : t("account.title")}
+        onMouseEnter={user ? showCard : undefined}
+        onMouseLeave={user ? scheduleClose : undefined}
+        onClick={() => !user && setAuthOpen(true)}
       >
         <span className="account-avatar" aria-hidden>
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
@@ -251,8 +257,8 @@ export function AccountMenuItem() {
           </svg>
         </span>
         <span className="account-copy">
-          <strong>{loggedIn ? PLACEHOLDER_USER.name : t("account.notLoggedIn")}</strong>
-          <small>{loggedIn ? PLACEHOLDER_USER.email : t("account.clickToLogin")}</small>
+          <strong>{user ? displayName : t("account.notLoggedIn")}</strong>
+          <small>{user ? user.email : t("account.clickToLogin")}</small>
         </span>
         <svg
           className="account-arrow"
@@ -271,7 +277,7 @@ export function AccountMenuItem() {
           />
         </svg>
       </button>
-      {loggedIn && open && anchor && (
+      {user && open && anchor && (
         createPortal(
           <div
             className="flyout flyout-account"
@@ -281,12 +287,11 @@ export function AccountMenuItem() {
           >
             <div className="acc-head">
               <div className="acc-name-row">
-                <strong>{PLACEHOLDER_USER.name}</strong>
+                <strong>{displayName}</strong>
                 <span className="acc-badge">{t("account.plan")}</span>
               </div>
-              <small className="acc-email">{PLACEHOLDER_USER.email}</small>
+              <small className="acc-email">{user.email}</small>
             </div>
-            {/* 个人中心/设置密码暂无后端，占位显示；退出登录切回未登录态 */}
             <button className="acc-row" type="button" title={t("account.todo")}>
               {t("account.personal")}
             </button>
@@ -294,18 +299,9 @@ export function AccountMenuItem() {
               className="acc-row"
               type="button"
               onClick={() => {
+                setUser(null);
                 setOpen(false);
-                setPwdOpen(true);
-              }}
-            >
-              {t("account.setPassword")}
-            </button>
-            <button
-              className="acc-row"
-              type="button"
-              onClick={() => {
-                setLoggedIn(false);
-                setOpen(false);
+                logout().catch(() => {});
               }}
             >
               {t("account.logout")}
@@ -314,7 +310,12 @@ export function AccountMenuItem() {
           document.body,
         )
       )}
-      {pwdOpen && <PasswordModal onClose={() => setPwdOpen(false)} />}
+      {authOpen && (
+        <AuthModal
+          onClose={() => setAuthOpen(false)}
+          onAuthenticated={setUser}
+        />
+      )}
     </>
   );
 }
