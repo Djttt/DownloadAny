@@ -14,6 +14,16 @@ pub const FMT_THUMBNAIL_PNG: &str = "__thumbnail_png__";
 pub const FMT_THUMBNAIL_WEBP: &str = "__thumbnail_webp__";
 pub const FMT_SUBTITLES: &str = "__subtitles__";
 
+fn subtitle_language(raw: &str) -> Option<&str> {
+    let language = raw.strip_prefix("__subtitle_")?.strip_suffix("__")?;
+    (!language.is_empty()
+        && language.len() <= 35
+        && language
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_')))
+    .then_some(language)
+}
+
 fn video_height(raw: &str) -> Option<u32> {
     let height = raw.strip_prefix("__video_")?.strip_suffix("p__")?.parse().ok()?;
     (144..=8640).contains(&height).then_some(height)
@@ -85,7 +95,7 @@ pub fn validate_proxy(raw: Option<&str>) -> Result<Option<String>, AppError> {
 /// - 哨兵值（最佳/仅音频）直接放行
 /// - 其余必须是本次 probe 结果里出现过的 id，且只含安全字符
 pub fn validate_format(raw: &str, probed_ids: &HashSet<String>) -> Result<(), AppError> {
-    if video_height(raw).is_some() {
+    if video_height(raw).is_some() || subtitle_language(raw).is_some() {
         return Ok(());
     }
     if matches!(
@@ -190,19 +200,23 @@ pub fn build_download_args(
             }
             .into(),
         ]),
-        // 字幕：人工 + 自动生成，统一转 SRT（依赖 FFmpeg）。
-        // 语言默认 zh/en 系：实测 all 会连带 180+ 种机译变体（ab-zh 等）触发 429 限流
+        // 旧任务兼容：历史记录里没有语言信息时仅尝试简体中文。
         FMT_SUBTITLES => args.extend([
             "--skip-download".into(),
             "--write-subs".into(),
             "--write-auto-subs".into(),
             "--sub-langs".into(),
-            // 显式列举而非 zh.* 通配：实测通配会命中机译变体（zh-Hans-zh 等）
-            // 触发 YouTube 429 限流；-*-zh 排除式又被 yt-dlp 拒绝（Wrong regex）
-            "zh,zh-Hans,zh-Hant,zh-CN,en,en-orig".into(),
-            // 间隔取轨避免 YouTube 429；单轨失败不中断，保证 convert 照常执行
-            "--sleep-subtitles".into(),
-            "1".into(),
+            "zh-Hans".into(),
+            "--ignore-errors".into(),
+            "--convert-subs".into(),
+            "srt".into(),
+        ]),
+        id if subtitle_language(id).is_some() => args.extend([
+            "--skip-download".into(),
+            "--write-subs".into(),
+            "--write-auto-subs".into(),
+            "--sub-langs".into(),
+            subtitle_language(id).expect("guarded subtitle language").into(),
             "--ignore-errors".into(),
             "--convert-subs".into(),
             "srt".into(),
@@ -276,11 +290,15 @@ mod tests {
     }
 
     #[test]
-    fn subtitles_fetch_all_and_convert() {
-        let args = build_download_args(FMT_SUBTITLES, "https://x", "/tmp/o", None, None);
+    fn subtitles_fetch_selected_language_and_convert() {
+        let args = build_download_args("__subtitle_en-orig__", "https://x", "/tmp/o", None, None);
         for flag in ["--write-subs", "--write-auto-subs", "--convert-subs", "srt"] {
             assert!(args.iter().any(|a| a == flag), "缺少 {flag}");
         }
+        let language_index = args.iter().position(|a| a == "--sub-langs").unwrap();
+        assert_eq!(args[language_index + 1], "en-orig");
+        assert!(!args.iter().any(|a| a.contains(',')), "一次只能下载一种字幕语言");
+        assert!(validate_format("__subtitle_zh-Hans__", &HashSet::new()).is_ok());
         assert!(validate_format(FMT_SUBTITLES, &HashSet::new()).is_ok());
         assert!(validate_format(FMT_THUMBNAIL, &HashSet::new()).is_ok());
     }

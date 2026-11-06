@@ -159,13 +159,10 @@ fn collapse_formats(json: &Value) -> Vec<FormatOption> {
             filesize: None,
         });
     }
-    let has_subs = ["subtitles", "automatic_captions"]
-        .iter()
-        .any(|k| json[*k].as_object().is_some_and(|m| !m.is_empty()));
-    if has_subs {
+    for language in subtitle_languages(json) {
         out.push(FormatOption {
-            id: crate::args::FMT_SUBTITLES.into(),
-            label: "字幕（SRT）".into(),
+            id: format!("__subtitle_{language}__"),
+            label: subtitle_language_label(&language),
             height: None,
             ext: Some("srt".into()),
             filesize: None,
@@ -173,4 +170,57 @@ fn collapse_formats(json: &Value) -> Vec<FormatOption> {
     }
 
     out
+}
+
+fn safe_subtitle_language(language: &str) -> bool {
+    !language.is_empty()
+        && language != "live_chat"
+        && language.len() <= 35
+        && language
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+}
+
+/// 人工字幕全部展示；自动字幕只展示常用中英文和原始语言，避免 YouTube
+/// 返回上百种机器翻译语言把下拉框撑满。
+fn subtitle_languages(json: &Value) -> Vec<String> {
+    const PREFERRED: &[&str] = &["zh-Hans", "zh-CN", "zh", "zh-Hant", "en-orig", "en"];
+    let manual = json["subtitles"].as_object();
+    let automatic = json["automatic_captions"].as_object();
+    let mut available = HashSet::new();
+
+    for language in manual.into_iter().flat_map(|items| items.keys()) {
+        if safe_subtitle_language(language) {
+            available.insert(language.to_string());
+        }
+    }
+    for language in automatic.into_iter().flat_map(|items| items.keys()) {
+        if safe_subtitle_language(language)
+            && (PREFERRED.contains(&language.as_str()) || language.ends_with("-orig"))
+        {
+            available.insert(language.to_string());
+        }
+    }
+
+    let mut result = Vec::new();
+    for preferred in PREFERRED {
+        if available.remove(*preferred) {
+            result.push((*preferred).to_string());
+        }
+    }
+    let mut remaining: Vec<_> = available.into_iter().collect();
+    remaining.sort();
+    result.extend(remaining);
+    result
+}
+
+fn subtitle_language_label(language: &str) -> String {
+    match language {
+        "zh-Hans" | "zh-CN" => "简体中文".into(),
+        "zh-Hant" | "zh-TW" | "zh-HK" => "繁体中文".into(),
+        "zh" => "中文".into(),
+        "en-orig" => "英文（原始）".into(),
+        "en" => "英文".into(),
+        _ => language.to_string(),
+    }
 }

@@ -33,6 +33,7 @@ import {
 } from "./lib/settings";
 import { setLangPref, t, useLang } from "./lib/i18n";
 import { setThemePref } from "./lib/theme";
+import { trackAnalyticsEvent } from "./lib/analytics";
 import { UrlBar } from "./components/UrlBar";
 import { FormatBar } from "./components/VideoCard";
 import { QueueList } from "./components/QueueList";
@@ -71,6 +72,8 @@ function App() {
   const [autoJobIds, setAutoJobIds] = useState<number[]>([]);
   const [autoCancelling, setAutoCancelling] = useState(false);
   const autoCancelRequested = useRef(false);
+  const analyticsJobs = useRef<Record<number, Pick<JobRecord, "url" | "title" | "formatId" | "formatLabel">>>({});
+  const trackedTerminalEvents = useRef(new Set<string>());
   const [view, setView] = useState<View>("download");
   const [dialog, setDialog] = useState<Dialog | null>(null);
 
@@ -78,7 +81,10 @@ function App() {
     (async () => {
       try {
         const existing = await listJobs();
-        if (existing.length) setJobs(Object.fromEntries(existing.map((j) => [j.id, j])));
+        if (existing.length) {
+          setJobs(Object.fromEntries(existing.map((j) => [j.id, j])));
+          analyticsJobs.current = Object.fromEntries(existing.map((job) => [job.id, job]));
+        }
         const [dir, auto, conc, lang, pType, pAddr, theme] = await Promise.all([
           loadOutputDir(),
           loadAutoMode(),
@@ -96,6 +102,7 @@ function App() {
         setProxyTypeState(pType);
         setProxyAddrState(pAddr);
         await setMaxConcurrency(conc); // 把持久化的偏好推给 Rust 队列
+        void trackAnalyticsEvent("app_open");
       } catch (e) {
         console.error(e);
       }
@@ -119,7 +126,28 @@ function App() {
         }),
       ),
     );
-    reg(onJobStatus((s) => upsert(s.jobId, { status: s.status, error: s.error, outputPath: s.outputPath })));
+    reg(onJobStatus((s) => {
+      upsert(s.jobId, { status: s.status, error: s.error, outputPath: s.outputPath });
+      const eventType = s.status === "completed"
+        ? "download_completed"
+        : s.status === "failed"
+          ? "download_failed"
+          : s.status === "cancelled"
+            ? "download_cancelled"
+            : null;
+      const job = analyticsJobs.current[s.jobId];
+      const eventKey = `${s.jobId}:${s.status}`;
+      if (eventType && job && !trackedTerminalEvents.current.has(eventKey)) {
+        trackedTerminalEvents.current.add(eventKey);
+        void trackAnalyticsEvent(eventType, {
+          mediaTitle: job.title,
+          mediaUrl: job.url,
+          formatId: job.formatId,
+          formatLabel: job.formatLabel,
+          error: s.error ?? undefined,
+        });
+      }
+    }));
     reg(
       onLogLine((l) =>
         setLogs((prev) => {
@@ -169,11 +197,17 @@ function App() {
         while (pending.length) {
           const url = pending.shift();
           if (!url) break;
+          void trackAnalyticsEvent("parse_requested", { mediaUrl: url });
           try {
             const info = await probeVideo(url, proxyUrl);
+            void trackAnalyticsEvent("parse_succeeded", {
+              mediaId: info.id,
+              mediaTitle: info.title,
+              mediaUrl: url,
+            });
             if (autoMode && info.formats[0]) {
               if (autoCancelRequested.current) continue;
-              const id = await enqueue(info.formats[0], url, info.title);
+              const id = await enqueue(info.formats[0], url, info.title, info.id);
               if (id != null) {
                 if (autoCancelRequested.current) {
                   cancelDownload(id).catch(() => {});
@@ -186,6 +220,7 @@ function App() {
               setVideos((current) => [...current, item].sort((a, b) => a.order - b.order));
             }
           } catch (e) {
+            void trackAnalyticsEvent("parse_failed", { mediaUrl: url, error: String(e) });
             failures.push(`${url}\n${String(e)}`);
           }
         }
@@ -203,6 +238,7 @@ function App() {
     format: FormatOption,
     url: string,
     title?: string,
+    mediaId?: string,
   ): Promise<number | undefined> {
     if (!outputDir) return;
     try {
@@ -217,6 +253,19 @@ function App() {
       upsert(id, {
         url,
         title: title ?? t("task.fallback", { id }),
+        formatId: format.id,
+        formatLabel: format.label,
+      });
+      analyticsJobs.current[id] = {
+        url,
+        title: title ?? t("task.fallback", { id }),
+        formatId: format.id,
+        formatLabel: format.label,
+      };
+      void trackAnalyticsEvent("download_started", {
+        mediaId,
+        mediaTitle: title,
+        mediaUrl: url,
         formatId: format.id,
         formatLabel: format.label,
       });
@@ -402,8 +451,9 @@ function App() {
           </div>
         )}
 
-        {view === "download" ? (
-          videos.length ? (
+        {/* 页面切换时保留解析卡片实例，避免 FormatBar 内的下载任务关联被重置。 */}
+        <div style={{ display: view === "download" ? "contents" : "none" }}>
+          {videos.length ? (
             <section className="format-results" aria-label={t("app.probeAria")}>
               {videos.map((item) => (
                 <FormatBar
@@ -412,15 +462,17 @@ function App() {
                   busy={false}
                   outputDir={outputDir}
                   jobs={jobs}
-                  onDownload={(format) => enqueue(format, item.url, item.info.title)}
+                  onDownload={(format) => enqueue(format, item.url, item.info.title, item.info.id)}
                   onCancel={cancel}
                   onDiscard={() => setVideos((current) => current.filter((video) => video.key !== item.key))}
                 />
               ))}
             </section>
-          ) : <PlatformWall />
-        ) : (
-          <section className="list" aria-label={view === "history" ? t("app.listAriaHistory") : t("app.listAriaQueue")}>
+          ) : <PlatformWall />}
+        </div>
+
+        {view === "history" && (
+          <section className="list" aria-label={t("app.listAriaHistory")}>
             <QueueList jobs={visible} logs={logs} outputDir={outputDir} onCancel={cancel} onRetry={handleRetry} />
           </section>
         )}

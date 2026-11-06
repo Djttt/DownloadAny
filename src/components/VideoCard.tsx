@@ -16,8 +16,6 @@ const IMAGE_FORMATS: FormatOption[] = [
   { id: "__thumbnail_webp__", label: "WebP" },
 ];
 
-const SUBTITLE_FORMAT: FormatOption = { id: "__subtitles__", label: "SRT" };
-
 interface Props {
   video: VideoInfo;
   busy: boolean;
@@ -38,16 +36,17 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
       ),
     [video.formats],
   );
+  const subtitleLanguages = useMemo(
+    () => video.formats.filter((format) => format.id.startsWith("__subtitle_")),
+    [video.formats],
+  );
   const [selected, setSelected] = useState<Record<RowKind, string>>({
     video: videoFormats[0]?.id ?? "",
     audio: AUDIO_FORMATS[0].id,
     image: IMAGE_FORMATS[0].id,
-    subtitle: SUBTITLE_FORMAT.id,
+    subtitle: subtitleLanguages[0]?.id ?? "",
   });
   const [rowJobs, setRowJobs] = useState<Partial<Record<RowKind, number>>>({});
-  const subtitleFormats = video.formats.some((format) => format.id === SUBTITLE_FORMAT.id)
-    ? [SUBTITLE_FORMAT]
-    : [];
 
   async function start(kind: RowKind, options: FormatOption[]) {
     const format = options.find((item) => item.id === selected[kind]);
@@ -83,14 +82,14 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
         />
         <DownloadRow
           label={t("subtitle.label")}
-          selectLabel={t("subtitle.format")}
-          options={subtitleFormats}
+          selectLabel={t("subtitle.language")}
+          options={subtitleLanguages}
           value={selected.subtitle}
           job={rowJobs.subtitle == null ? undefined : jobs[rowJobs.subtitle]}
           busy={busy}
           outputDir={outputDir}
           onChange={(value) => setSelected((current) => ({ ...current, subtitle: value }))}
-          onDownload={() => start("subtitle", subtitleFormats)}
+          onDownload={() => start("subtitle", subtitleLanguages)}
           onCancel={onCancel}
         />
         <DownloadRow
@@ -154,6 +153,15 @@ function DownloadRow({
   showSelectedSize?: boolean;
 }) {
   const active = job?.status === "queued" || job?.status === "running";
+  const hasProgress = Boolean(
+    job?.status === "running"
+      && ((job.percent ?? 0) > 0 || job.downloadedBytes > 0 || (job.speed ?? 0) > 0),
+  );
+  const progressText = hasProgress
+    ? `${(job?.percent ?? 0).toFixed(0)}%${(job?.speed ?? 0) > 0 ? ` · ${fmtSpeed(job?.speed)}` : ""}`
+    : job?.status === "queued"
+      ? t("row.waiting")
+      : t("row.preparing");
   const status =
     job?.status === "failed"
         ? t("status.failed")
@@ -169,15 +177,11 @@ function DownloadRow({
         <div className="active-download">
           <div className="inline-progress">
             <span
-              className={job?.status === "queued" ? "waiting" : ""}
-              style={{ width: `${Math.max(job?.percent ?? 0, 3)}%` }}
+              className={!hasProgress ? "waiting" : ""}
+              style={hasProgress ? { width: `${Math.min(job?.percent ?? 0, 100)}%` } : undefined}
             />
           </div>
-          <em>
-            {job?.status === "queued"
-              ? t("row.waiting")
-              : `${(job?.percent ?? 0).toFixed(0)}% · ${fmtSpeed(job?.speed)}`}
-          </em>
+          <em>{progressText}</em>
           <button className="cancel-download" onClick={() => job && onCancel(job.id)}>
             {t("row.cancel")}
           </button>

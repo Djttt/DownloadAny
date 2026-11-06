@@ -32,6 +32,11 @@ interface StoredSession {
 
 let session = readSession();
 
+/** 供非关键的统计请求关联登录用户；统计失败不能影响认证流程。 */
+export function currentAccessToken(): string | undefined {
+  return session?.accessToken;
+}
+
 function readSession(): StoredSession | null {
   try {
     const value = localStorage.getItem(SESSION_KEY);
