@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light;
   --paper: #f3f3f3;
   --surface: #ffffff;
   --hairline: #dcdcdc;
@@ -10,8 +11,78 @@
   --green: #2ba471;
   --red: #d54941;
   --amber: #ed7b2f;
+  /* 语义灰阶/品牌色细节（主题相关，深色覆盖见文件头 [data-theme="dark"]） */
+  --faint: #a1a1aa; /* 占位符、禁用、次要图标 */
+  --ink-soft: #52525b; /* 次级正文(平台卡、菜单图标) */
+  --hover-soft: #fafafa; /* 表格行悬停 */
+  --track: #d4d4d8; /* 开关关闭轨道、滚动条 */
+  --line-strong: #c4c4cc; /* radio 边框、禁用文字 */
+  --frost: rgba(255, 255, 255, 0.9); /* 平台墙卡片 */
+  --float: rgba(255, 255, 255, 0.98); /* 下拉菜单、飞窗 */
+  --indigo-hover: #366ef4; /* 品牌按钮悬停 */
+  --ring: rgba(0, 82, 217, 0.1); /* 聚焦圈 */
+  --ripple: rgba(0, 82, 217, 0.16); /* 导航点击波纹 */
+  --ripple-on: rgba(0, 82, 217, 0.2);
+  --indigo-glow: rgba(0, 82, 217, 0.08); /* 卡片悬停投影 */
+  --indigo-line: #a6c4ff; /* 悬停浅蓝描边 */
+  --danger-tint-bg: #fef2f2; /* 错误/取消提示底 */
+  --danger-bg: #fff0ed; /* 停止按钮悬停底 */
+  --danger-ink: #c9352f; /* 错误深红文字 */
+  --danger-line: #fca5a5; /* 错误浅红描边 */
+  --danger-ring: rgba(213, 73, 65, 0.12);
+  --success-bg: #eef7ee;
+  --success-ink: #28723a;
   font-family: "MiSans", "Inter", "Segoe UI", sans-serif;
   font-size: 14px;
+}
+
+/* ================= 深色主题 =================
+ * 灰阶层次方案：#181818 纸面 / #242424 面板 / 逐级提亮做悬浮层，
+ * 品牌蓝提亮到 #4589ff 系保证暗底对比度；由 lib/theme.ts 写 html[data-theme] 切换。 */
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #181818;
+  --surface: #242424;
+  --hairline: #3d3d3d;
+  --ink: #e8e8e6;
+  --muted: #939398;
+  --indigo: #4589ff;
+  --indigo-ink: #7cc0ff;
+  --mist: #1c2a44;
+  --green: #47b581;
+  --red: #e97f76;
+  --amber: #eda366;
+  --faint: #7a7a80;
+  --ink-soft: #b8b8be;
+  --hover-soft: #2c2c2c;
+  --track: #50505a;
+  --line-strong: #5b5b62;
+  --frost: rgba(40, 40, 40, 0.9);
+  --float: rgba(44, 44, 44, 0.98);
+  --indigo-hover: #6ba3ff;
+  --ring: rgba(69, 137, 255, 0.35);
+  --ripple: rgba(108, 177, 255, 0.2);
+  --ripple-on: rgba(108, 177, 255, 0.3);
+  --indigo-glow: rgba(69, 137, 255, 0.16);
+  --indigo-line: #496aa3;
+  --danger-tint-bg: #3a2422;
+  --danger-bg: #442a27;
+  --danger-ink: #f3a29b;
+  --danger-line: #7c4a44;
+  --danger-ring: rgba(233, 127, 118, 0.3);
+  --success-bg: #223428;
+  --success-ink: #86d9b1;
+}
+
+/* select 下拉箭头是内联 SVG，描边色无法走 var()，深色下单独换色 */
+:root[data-theme="dark"] .select {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m3.5 6 4.5 4.5L12.5 6' stroke='%23939398' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+/* 深底上的遮罩需要更重才分得清层次 */
+:root[data-theme="dark"] .modal-mask {
+  background: rgba(0, 0, 0, 0.6);
 }
 
 * {
@@ -121,13 +192,13 @@ select:focus-visible {
   z-index: 0;
   pointer-events: none;
   border-radius: 50%;
-  background: rgba(0, 82, 217, 0.16);
+  background: var(--ripple);
   transform: scale(0);
   animation: nav-ripple 0.52s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 .nav.on .nav-ripple {
-  background: rgba(0, 82, 217, 0.2);
+  background: var(--ripple-on);
 }
 
 @keyframes nav-ripple {
@@ -222,7 +293,7 @@ select:focus-visible {
 
 .account-arrow {
   flex-shrink: 0;
-  color: #a1a1aa;
+  color: var(--faint);
 }
 
 /* ---- 账户卡片(portal 渲染在 body 层，fixed 定位与 z-index 由内联样式给出) ----
@@ -352,7 +423,7 @@ select:focus-visible {
   width: 34px;
   height: 20px;
   border-radius: 10px;
-  background: #d4d4d8;
+  background: var(--track);
   position: relative;
   transition: background 0.15s ease;
 }
@@ -422,7 +493,7 @@ select:focus-visible {
   background: none;
   padding: 6px 2px;
   scrollbar-width: thin;
-  scrollbar-color: #d4d4d8 transparent;
+  scrollbar-color: var(--track) transparent;
 }
 
 .url-field textarea::-webkit-scrollbar {
@@ -436,11 +507,11 @@ select:focus-visible {
 
 .url-field textarea::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: #d4d4d8;
+  background: var(--track);
 }
 
 .url-field textarea::-webkit-scrollbar-thumb:hover {
-  background: #a1a1aa;
+  background: var(--faint);
 }
 
 .url-field textarea::-webkit-scrollbar-corner {
@@ -452,7 +523,7 @@ select:focus-visible {
 }
 
 .url-field textarea::placeholder {
-  color: #a1a1aa;
+  color: var(--faint);
 }
 
 .url-field {
@@ -508,10 +579,10 @@ select:focus-visible {
   justify-content: center;
   gap: 6px;
   padding: 8px 16px;
-  border: 1px solid #d54941;
+  border: 1px solid var(--red);
   border-radius: 6px;
   background: var(--surface);
-  color: #d54941;
+  color: var(--red);
   font-weight: 600;
   transition:
     color 0.2s ease,
@@ -521,9 +592,9 @@ select:focus-visible {
 }
 
 .stop-auto-download:hover:not(:disabled) {
-  border-color: #c9352f;
-  background: #fff0ed;
-  color: #c9352f;
+  border-color: var(--danger-ink);
+  background: var(--danger-bg);
+  color: var(--danger-ink);
 }
 
 .stop-auto-download:active:not(:disabled) {
@@ -536,7 +607,7 @@ select:focus-visible {
 }
 
 .url-bar .big:hover:not(:disabled) {
-  background: #366ef4;
+  background: var(--indigo-hover);
   transform: translateY(-1px);
 }
 
@@ -576,7 +647,7 @@ select:focus-visible {
   margin-top: 10px;
   color: var(--red);
   font-size: 12.5px;
-  background: #fef2f2;
+  background: var(--danger-tint-bg);
   border-radius: 8px;
   padding: 7px 10px;
   word-break: break-all;
@@ -720,18 +791,18 @@ select:focus-visible {
   align-items: center;
   gap: 9px;
   padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--frost);
   border: 1px solid var(--hairline);
   border-radius: 10px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.025);
-  color: #52525b;
+  color: var(--ink-soft);
   font-size: 12px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .platform-card:hover {
-  border-color: #a6c4ff;
-  box-shadow: 0 5px 14px rgba(0, 82, 217, 0.08);
+  border-color: var(--indigo-line);
+  box-shadow: 0 5px 14px var(--indigo-glow);
 }
 
 .platform-scroll.dragging .platform-card,
@@ -772,7 +843,7 @@ select:focus-visible {
   overflow-y: auto;
   padding-right: 4px;
   scrollbar-width: thin;
-  scrollbar-color: #d4d4d8 transparent;
+  scrollbar-color: var(--track) transparent;
 }
 
 .format-panel {
@@ -892,8 +963,8 @@ select:focus-visible {
 
 .format-select-trigger:hover,
 .format-select.open .format-select-trigger {
-  border-color: #0052d9;
-  box-shadow: 0 0 0 2px rgba(0, 82, 217, 0.1);
+  border-color: var(--indigo);
+  box-shadow: 0 0 0 2px var(--ring);
 }
 
 .format-select-trigger:disabled {
@@ -931,7 +1002,7 @@ select:focus-visible {
   padding: 5px;
   border: 1px solid var(--hairline);
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.98);
+  background: var(--float);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
   transform-origin: top left;
   animation: format-select-in 0.2s cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -958,7 +1029,7 @@ select:focus-visible {
   gap: 18px;
   padding: 7px 9px;
   border-radius: 6px;
-  color: #52525b;
+  color: var(--ink-soft);
   font-size: 12px;
   text-align: left;
   white-space: nowrap;
@@ -1095,9 +1166,9 @@ select:focus-visible {
 }
 
 .cancel-download:hover {
-  border-color: #fca5a5;
+  border-color: var(--danger-line);
   color: var(--red);
-  background: #fef2f2;
+  background: var(--danger-tint-bg);
 }
 
 .inline-download em {
@@ -1131,7 +1202,7 @@ select:focus-visible {
 
 .mini-cancel:hover {
   color: var(--red);
-  background: #fef2f2;
+  background: var(--danger-tint-bg);
 }
 
 .format-close {
@@ -1264,11 +1335,11 @@ select:focus-visible {
 }
 
 .row:hover {
-  background: #fafafa;
+  background: var(--hover-soft);
 }
 
 .c-idx {
-  color: #a1a1aa;
+  color: var(--faint);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
@@ -1459,7 +1530,7 @@ select:focus-visible {
   flex-direction: column;
   gap: 2px;
   padding: 8px;
-  background: rgba(255, 255, 255, 0.98);
+  background: var(--float);
   border: 1px solid var(--hairline);
   border-radius: 10px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
@@ -1505,7 +1576,7 @@ select:focus-visible {
 
 .fly-row svg {
   flex-shrink: 0;
-  color: #3f3f46;
+  color: var(--ink-soft);
 }
 
 .fly-copy {
@@ -1612,7 +1683,7 @@ select:focus-visible {
   gap: 10px;
   border: 1px solid var(--hairline);
   border-radius: 8px;
-  background: #fff;
+  background: var(--surface);
   color: var(--ink);
   font-size: 13px;
   font-weight: 600;
@@ -1648,7 +1719,7 @@ select:focus-visible {
 
 .auth-method-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 4px;
   margin: 0 0 18px;
   padding: 4px;
@@ -1696,7 +1767,7 @@ select:focus-visible {
 
 .auth-field input:focus {
   border-color: var(--indigo);
-  box-shadow: 0 0 0 2px rgba(0, 82, 217, 0.1);
+  box-shadow: 0 0 0 2px var(--ring);
 }
 
 .auth-field input:disabled {
@@ -1721,7 +1792,7 @@ select:focus-visible {
   min-width: 96px;
   height: 42px;
   padding: 0 12px;
-  border: 1px solid #a6c4ff;
+  border: 1px solid var(--indigo-line);
   border-radius: 9px;
   color: var(--indigo);
   font-size: 12px;
@@ -1741,6 +1812,15 @@ select:focus-visible {
   height: 18px;
   margin-bottom: 8px;
   overflow: hidden;
+}
+
+.auth-pwd {
+  position: relative;
+  display: block;
+}
+
+.auth-pwd input {
+  padding-right: 42px;
 }
 
 .auth-notice,
@@ -1831,7 +1911,7 @@ select:focus-visible {
 }
 
 .radio-card:hover {
-  border-color: #a6c4ff;
+  border-color: var(--indigo-line);
 }
 
 .radio-card.on {
@@ -1851,7 +1931,7 @@ select:focus-visible {
   height: 16px;
   margin-top: 2px;
   border-radius: 50%;
-  border: 1.5px solid #c4c4cc;
+  border: 1.5px solid var(--line-strong);
   background: var(--surface);
   display: grid;
   place-items: center;
@@ -1916,16 +1996,16 @@ select:focus-visible {
 .desc:focus {
   outline: none;
   border-color: var(--indigo);
-  box-shadow: 0 0 0 2px rgba(0, 82, 217, 0.1);
+  box-shadow: 0 0 0 2px var(--ring);
 }
 
 .desc::placeholder {
-  color: #a1a1aa;
+  color: var(--faint);
 }
 
 .desc.invalid {
   border-color: var(--red);
-  box-shadow: 0 0 0 2px rgba(213, 73, 65, 0.12);
+  box-shadow: 0 0 0 2px var(--danger-ring);
 }
 
 .desc-error {
@@ -1953,7 +2033,7 @@ select:focus-visible {
 }
 
 .primary:hover {
-  background: #366ef4;
+  background: var(--indigo-hover);
 }
 
 .primary:active {
@@ -1991,18 +2071,18 @@ select:focus-visible {
 }
 
 .pwd-input::placeholder {
-  color: #a1a1aa;
+  color: var(--faint);
 }
 
 .pwd-input:focus {
   outline: none;
   border-color: var(--indigo);
-  box-shadow: 0 0 0 2px rgba(0, 82, 217, 0.1);
+  box-shadow: 0 0 0 2px var(--ring);
 }
 
 .pwd-input.invalid {
   border-color: var(--red);
-  box-shadow: 0 0 0 2px rgba(213, 73, 65, 0.12);
+  box-shadow: 0 0 0 2px var(--danger-ring);
 }
 
 .pwd-eye {
@@ -2015,7 +2095,7 @@ select:focus-visible {
   width: 28px;
   height: 28px;
   border-radius: 7px;
-  color: #a1a1aa;
+  color: var(--faint);
   transition: color 0.15s ease, background-color 0.15s ease;
 }
 
@@ -2234,7 +2314,7 @@ select:focus-visible {
 }
 
 .stepper button:disabled {
-  color: #c4c4cc;
+  color: var(--line-strong);
   cursor: default;
 }
 
@@ -2268,7 +2348,7 @@ select:focus-visible {
 .select:focus {
   outline: none;
   border-color: var(--indigo);
-  box-shadow: 0 0 0 2px rgba(0, 82, 217, 0.1);
+  box-shadow: 0 0 0 2px var(--ring);
 }
 
 .setting-note {
@@ -2299,13 +2379,13 @@ select:focus-visible {
 }
 
 .proxy-row .text-input::placeholder {
-  color: #a1a1aa;
+  color: var(--faint);
 }
 
 .proxy-row .text-input:focus {
   outline: none;
   border-color: var(--indigo);
-  box-shadow: 0 0 0 2px rgba(0, 82, 217, 0.1);
+  box-shadow: 0 0 0 2px var(--ring);
 }
 
 .proxy-row .chg {
@@ -2328,6 +2408,85 @@ select:focus-visible {
 .proxy-row .chg:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+/* 网络页：站点连通测试 */
+.net-test-block {
+  margin-top: 22px;
+}
+
+.net-test-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.net-test-head h4 {
+  margin: 0;
+}
+
+.net-test-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--indigo);
+  color: #fff;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.net-test-run:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.net-test-run:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.site-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.site-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.chip-spin {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--hairline);
+  border-top-color: var(--indigo);
+  border-radius: 50%;
+  animation: chip-spin-rotate 0.8s linear infinite;
+}
+
+.chip-spin.light {
+  border-color: rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+}
+
+@keyframes chip-spin-rotate {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .about-list {
@@ -2380,7 +2539,7 @@ select:focus-visible {
 
 .url-field:focus-within {
   border-color: var(--indigo);
-  box-shadow: 0 0 0 2px rgba(0, 82, 217, 0.1);
+  box-shadow: 0 0 0 2px var(--ring);
 }
 
 .nav {
@@ -2403,7 +2562,7 @@ select:focus-visible {
 
 .row-download:hover:not(:disabled),
 .format-bar .go:hover:not(:disabled) {
-  background: #366ef4;
+  background: var(--indigo-hover);
 }
 
 .row-download:active:not(:disabled),

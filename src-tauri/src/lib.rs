@@ -1,6 +1,7 @@
 mod args;
 mod commands;
 mod error;
+mod nettest;
 mod probe;
 mod progress;
 mod queue;
@@ -28,7 +29,8 @@ pub fn run() {
             commands::open_download_location,
             commands::dependency_info,
             commands::detect_proxy,
-            commands::google_oauth_login
+            commands::google_oauth_login,
+            commands::test_site
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

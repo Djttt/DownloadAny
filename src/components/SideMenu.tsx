@@ -2,18 +2,21 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { createPortal } from "react-dom";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { getVersion } from "@tauri-apps/api/app";
-import { dependencyInfo, detectProxy } from "../lib/tauri";
+import { dependencyInfo, detectProxy, testSite } from "../lib/tauri";
 import type { DependencyInfo } from "../types";
 import {
   CONCURRENCY_MAX,
   CONCURRENCY_MIN,
   buildProxyUrl,
   saveLangPref,
+  saveThemePref,
   type ProxyType,
 } from "../lib/settings";
 import { getLangPref, setLangPref, t, type LangPref } from "../lib/i18n";
+import { getThemePref, setThemePref, type ThemePref } from "../lib/theme";
 import { changePassword, logout, restoreUser, type AuthUser } from "../lib/auth";
 import { AuthModal } from "./AuthModal";
+import { EyeIcon } from "./EyeIcon";
 
 /* ========================================================================
  * 侧栏功能菜单:联系客服(悬停飞窗)/ 问题反馈(弹窗)/ 设置(弹窗)
@@ -390,21 +393,6 @@ export function PasswordModal({
     }
   }
 
-  function Eye({ off }: { off: boolean }) {
-    return (
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden>
-        <path
-          d="M2.6 12S6.1 5.6 12 5.6 21.4 12 21.4 12 17.9 18.4 12 18.4 2.6 12 2.6 12Z"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinejoin="round"
-        />
-        <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" />
-        {off && <path d="M4.5 4.5 19.5 19.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />}
-      </svg>
-    );
-  }
-
   function field(
     id: string,
     label: string,
@@ -440,7 +428,7 @@ export function PasswordModal({
             aria-label={reveal ? t("pwd.hide") : t("pwd.show")}
             onClick={onToggle}
           >
-            <Eye off={reveal} />
+            <EyeIcon off={reveal} />
           </button>
         </div>
         <p className="pwd-field-error" role={errorMessage ? "alert" : undefined}>
@@ -642,11 +630,18 @@ export function SettingsModal({
 }) {
   const [tab, setTab] = useState<SettingsTab>("general");
   const [langPref, setLangPrefState] = useState<LangPref>(getLangPref());
+  const [themePref, setThemePrefState] = useState<ThemePref>(getThemePref());
 
   function changeLang(p: LangPref) {
     setLangPrefState(p);
     setLangPref(p);
     saveLangPref(p).catch(() => {});
+  }
+
+  function changeTheme(p: ThemePref) {
+    setThemePrefState(p);
+    setThemePref(p);
+    saveThemePref(p).catch(() => {});
   }
 
   return (
@@ -690,6 +685,19 @@ export function SettingsModal({
                   <option value="system">{t("lang.system")}</option>
                   <option value="zh">{t("lang.zh")}</option>
                   <option value="en">{t("lang.en")}</option>
+                </select>
+              </div>
+              <div className="setting-block">
+                <h4>{t("set.themeLabel")}</h4>
+                <select
+                  className="select"
+                  value={themePref}
+                  onChange={(e) => changeTheme(e.target.value as ThemePref)}
+                  aria-label={t("set.themeLabel")}
+                >
+                  <option value="system">{t("theme.system")}</option>
+                  <option value="light">{t("theme.light")}</option>
+                  <option value="dark">{t("theme.dark")}</option>
                 </select>
               </div>
               <div className="setting-block">
@@ -764,6 +772,53 @@ const PROXY_KEYS: Record<ProxyType, "proxy.none" | "proxy.http" | "proxy.socks5"
   socks5: "proxy.socks5",
 };
 
+// 站点 id 必须与 Rust nettest::TEST_SITES 白名单一致,label 为专名不随语言翻译
+const NET_TEST_SITES: { id: string; label: string }[] = [
+  { id: "youtube", label: "YouTube" },
+  { id: "twitter", label: "Twitter" },
+  { id: "instagram", label: "Instagram" },
+  { id: "baidu", label: "Baidu" },
+];
+
+type SiteState = "idle" | "busy" | "ok" | "fail";
+
+function SiteStatusIcon({ state }: { state: SiteState }) {
+  if (state === "ok") {
+    return (
+      <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden>
+        <circle cx="7" cy="7" r="7" fill="var(--green)" />
+        <path
+          d="m4.1 7.2 2 2 3.8-4.4"
+          stroke="#fff"
+          strokeWidth="1.6"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+  if (state === "fail") {
+    return (
+      <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden>
+        <circle cx="7" cy="7" r="7" fill="var(--red)" />
+        <path
+          d="M4.9 4.9l4.2 4.2M9.1 4.9l-4.2 4.2"
+          stroke="#fff"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  if (state === "busy") return <span className="chip-spin" aria-hidden />;
+  return (
+    <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden>
+      <circle cx="7" cy="7" r="5.6" fill="none" stroke="currentColor" strokeWidth="1.6" opacity=".25" />
+    </svg>
+  );
+}
+
 function NetworkPane({
   proxyType,
   proxyAddr,
@@ -779,6 +834,28 @@ function NetworkPane({
   useEffect(() => setDraft(proxyAddr), [proxyAddr]);
 
   const activeUrl = buildProxyUrl(proxyType, proxyAddr);
+
+  // 网络测试：4 站点并行，结果逐站点亮（invoke 内现取当前代理设置）
+  const [siteStatus, setSiteStatus] = useState<Record<string, SiteState>>({});
+  const [siteError, setSiteError] = useState<Record<string, string>>({});
+  const testing = NET_TEST_SITES.some((s) => siteStatus[s.id] === "busy");
+
+  function runNetTest() {
+    const url = activeUrl;
+    setSiteStatus(Object.fromEntries(NET_TEST_SITES.map((s) => [s.id, "busy" as SiteState])));
+    setSiteError({});
+    for (const { id } of NET_TEST_SITES) {
+      testSite(id, url)
+        .then((r) => {
+          setSiteStatus((prev) => ({ ...prev, [id]: r.ok ? "ok" : "fail" }));
+          if (!r.ok && r.error) setSiteError((prev) => ({ ...prev, [id]: r.error as string }));
+        })
+        .catch((e) => {
+          setSiteStatus((prev) => ({ ...prev, [id]: "fail" }));
+          setSiteError((prev) => ({ ...prev, [id]: String(e) }));
+        });
+    }
+  }
 
   async function handleDetect() {
     setDetect("busy");
@@ -847,6 +924,31 @@ function NetworkPane({
             ? t("set.proxyInactive")
             : t("set.proxyAddrMissing")}
       </p>
+      <div className="setting-block net-test-block">
+        <div className="net-test-head">
+          <h4>{t("set.netTestTitle")}</h4>
+          <button className="net-test-run" type="button" disabled={testing} onClick={runNetTest}>
+            {testing && <span className="chip-spin light" aria-hidden />}
+            {testing ? t("set.netTestRunning") : t("set.netTestStart")}
+          </button>
+        </div>
+        <div className="site-chips">
+          {NET_TEST_SITES.map((s) => {
+            const st = siteStatus[s.id] ?? "idle";
+            return (
+              <span
+                className="site-chip"
+                key={s.id}
+                title={st === "fail" ? siteError[s.id] : undefined}
+              >
+                {s.label}
+                <SiteStatusIcon state={st} />
+              </span>
+            );
+          })}
+        </div>
+        <p className="setting-note">{t("set.netTestNote")}</p>
+      </div>
     </>
   );
 }

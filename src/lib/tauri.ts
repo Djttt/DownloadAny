@@ -7,6 +7,7 @@ import type {
   LogLineEvent,
   ProgressEvent,
   ProxyCandidate,
+  SiteTestResult,
   StatusEvent,
   VideoInfo,
 } from "../types";
@@ -43,6 +44,9 @@ export interface GoogleAuthorizationCode {
 
 export const googleOAuthLogin = (clientId: string) =>
   invoke<GoogleAuthorizationCode>("google_oauth_login", { clientId });
+
+export const testSite = (site: string, proxy: string | null) =>
+  invoke<SiteTestResult>("test_site", { site, proxy });
 
 // ---- events ----
 

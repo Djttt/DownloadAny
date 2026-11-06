@@ -77,6 +77,24 @@ function errorMessage(body: unknown, fallback: string): string {
   return typeof message === "string" ? message : fallback;
 }
 
+class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
+// 后端以 428 要求人机验证：拉取算术题后抛给 UI 渲染。
+export class CaptchaRequiredError extends Error {
+  constructor(readonly captchaId: string, readonly question: string) {
+    super("需要有效的验证码");
+  }
+}
+
+export interface LoginCaptcha {
+  id: string;
+  answer: string;
+}
+
 async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body) headers.set("Content-Type", "application/json");
@@ -88,7 +106,7 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
     throw new Error("无法连接登录服务，请检查服务是否已启动");
   }
   const body = response.status === 204 ? null : await response.json().catch(() => null);
-  if (!response.ok) throw new Error(errorMessage(body, `请求失败 (${response.status})`));
+  if (!response.ok) throw new ApiError(errorMessage(body, `请求失败 (${response.status})`), response.status);
   return body as T;
 }
 
@@ -106,12 +124,20 @@ async function meWithToken(token: string): Promise<AuthUser> {
   return userFromApi(await request<ApiUser>("/api/auth/me", {}, token));
 }
 
-export async function loginWithPassword(email: string, password: string): Promise<AuthUser> {
-  const tokens = await request<TokenResponse>("/api/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
-  return acceptTokens(tokens);
+export async function loginWithPassword(email: string, password: string, captcha?: LoginCaptcha): Promise<AuthUser> {
+  try {
+    const tokens = await request<TokenResponse>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password, captcha_id: captcha?.id, captcha_answer: captcha?.answer }),
+    });
+    return acceptTokens(tokens);
+  } catch (reason) {
+    if (reason instanceof ApiError && reason.status === 428) {
+      const challenge = await request<{ captcha_id: string; question: string }>("/api/auth/captcha");
+      throw new CaptchaRequiredError(challenge.captcha_id, challenge.question);
+    }
+    throw reason;
+  }
 }
 
 export async function register(email: string, password: string): Promise<string> {
@@ -130,10 +156,27 @@ export async function resendVerification(email: string): Promise<string> {
   return result.message;
 }
 
-export async function verifyEmailCode(email: string, code: string): Promise<string> {
-  const result = await request<{ message: string }>("/api/auth/verification/code", {
+// 验证成功后端当场签发登录令牌：验证即登录。
+export async function verifyEmailCode(email: string, code: string): Promise<AuthUser> {
+  const tokens = await request<TokenResponse>("/api/auth/verification/code", {
     method: "POST",
     body: JSON.stringify({ email, code }),
+  });
+  return acceptTokens(tokens);
+}
+
+export async function forgotPassword(email: string): Promise<string> {
+  const result = await request<{ message: string }>("/api/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+  return result.message;
+}
+
+export async function resetPasswordByEmailCode(email: string, code: string, newPassword: string): Promise<string> {
+  const result = await request<{ message: string }>("/api/auth/reset-password/code", {
+    method: "POST",
+    body: JSON.stringify({ email, code, new_password: newPassword }),
   });
   return result.message;
 }
