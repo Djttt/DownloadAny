@@ -16,6 +16,7 @@ import { getLangPref, setLangPref, t, type LangPref } from "../lib/i18n";
 import { getThemePref, setThemePref, type ThemePref } from "../lib/theme";
 import { logout, restoreUser, type AuthUser } from "../lib/auth";
 import { AuthModal } from "./AuthModal";
+import { EyeIcon } from "./EyeIcon";
 
 /* ========================================================================
  * 侧栏功能菜单:联系客服(悬停飞窗)/ 问题反馈(弹窗)/ 设置(弹窗)
@@ -344,21 +345,6 @@ export function PasswordModal({ onClose }: { onClose: () => void }) {
     setDone(true);
   }
 
-  function Eye({ off }: { off: boolean }) {
-    return (
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden>
-        <path
-          d="M2.6 12S6.1 5.6 12 5.6 21.4 12 21.4 12 17.9 18.4 12 18.4 2.6 12 2.6 12Z"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinejoin="round"
-        />
-        <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" />
-        {off && <path d="M4.5 4.5 19.5 19.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />}
-      </svg>
-    );
-  }
-
   function field(
     id: string,
     label: string,
@@ -391,7 +377,7 @@ export function PasswordModal({ onClose }: { onClose: () => void }) {
             aria-label={reveal ? t("pwd.hide") : t("pwd.show")}
             onClick={onToggle}
           >
-            <Eye off={reveal} />
+            <EyeIcon off={reveal} />
           </button>
         </div>
       </div>

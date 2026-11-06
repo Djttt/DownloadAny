@@ -1808,6 +1808,15 @@ select:focus-visible {
   opacity: 0.55;
 }
 
+.auth-pwd {
+  position: relative;
+  display: block;
+}
+
+.auth-pwd input {
+  padding-right: 42px;
+}
+
 .auth-notice,
 .auth-error {
   margin: 0 0 12px;

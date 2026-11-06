@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  CaptchaRequiredError,
   forgotPassword,
   GOOGLE_CLIENT_ID,
   loginWithGoogle,
@@ -11,6 +12,7 @@ import {
   type AuthUser,
 } from "../lib/auth";
 import { t } from "../lib/i18n";
+import { EyeIcon } from "./EyeIcon";
 
 declare global {
   interface Window {
@@ -53,6 +55,9 @@ export function AuthModal({ onClose, onAuthenticated }: { onClose: () => void; o
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [code, setCode] = useState("");
+  const [captcha, setCaptcha] = useState<{ id: string; question: string; answer: string } | null>(null);
+  const [reveal, setReveal] = useState(false);
+  const [revealConfirm, setRevealConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -105,6 +110,36 @@ export function AuthModal({ onClose, onAuthenticated }: { onClose: () => void; o
     }
   }
 
+  function passwordRow(
+    label: string,
+    placeholder: string,
+    autoComplete: string,
+    value: string,
+    revealed: boolean,
+    onToggle: () => void,
+    onChange: (v: string) => void,
+  ) {
+    return (
+      <label className="auth-field">
+        <span>{label}</span>
+        <span className="auth-pwd">
+          <input type={revealed ? "text" : "password"} value={value} disabled={busy} autoComplete={autoComplete} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+          <button
+            type="button"
+            className="pwd-eye"
+            aria-label={revealed ? t("pwd.hide") : t("pwd.show")}
+            onClick={(event) => {
+              event.preventDefault();
+              onToggle();
+            }}
+          >
+            <EyeIcon off={revealed} />
+          </button>
+        </span>
+      </label>
+    );
+  }
+
   function switchView(next: AuthView) {
     setView(next);
     setError(null);
@@ -112,6 +147,25 @@ export function AuthModal({ onClose, onAuthenticated }: { onClose: () => void; o
     setPassword("");
     setConfirm("");
     setCode("");
+    setCaptcha(null);
+  }
+
+  async function submitPassword(normalizedEmail: string, value: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      onAuthenticated(await loginWithPassword(normalizedEmail, value, captcha ? { id: captcha.id, answer: captcha.answer } : undefined));
+      onClose();
+    } catch (reason) {
+      if (reason instanceof CaptchaRequiredError) {
+        setCaptcha({ id: reason.captchaId, question: reason.question, answer: "" });
+        setError(t("auth.captchaRequired"));
+      } else {
+        setError(reason instanceof Error ? reason.message : String(reason));
+      }
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function runMessage(action: () => Promise<string>) {
@@ -168,7 +222,8 @@ export function AuthModal({ onClose, onAuthenticated }: { onClose: () => void; o
     if (!normalizedEmail) return setError(t("auth.emailRequired"));
     if (view === "password") {
       if (!password) return setError(t("auth.passwordRequired"));
-      return run(() => loginWithPassword(normalizedEmail, password));
+      if (captcha && !captcha.answer.trim()) return setError(t("auth.captchaAnswerRequired"));
+      return submitPassword(normalizedEmail, password);
     }
     if (!/^\d{6}$/.test(code)) return setError(t("auth.codeInvalid"));
     if (view === "register") {
@@ -217,21 +272,44 @@ export function AuthModal({ onClose, onAuthenticated }: { onClose: () => void; o
             <input type="email" value={email} disabled={busy} autoComplete="email" placeholder="name@example.com" onChange={(event) => setEmail(event.target.value)} />
           </label>
           {view === "password" && (
-            <label className="auth-field">
-              <span>{t("auth.password")}</span>
-              <input type="password" value={password} disabled={busy} autoComplete="current-password" placeholder={t("auth.passwordPlaceholder")} onChange={(event) => setPassword(event.target.value)} />
-            </label>
+            <>
+              {passwordRow(
+                t("auth.password"),
+                t("auth.passwordPlaceholder"),
+                "current-password",
+                password,
+                reveal,
+                () => setReveal(!reveal),
+                setPassword,
+              )}
+              {captcha && (
+                <label className="auth-field">
+                  <span>{captcha.question}</span>
+                  <input inputMode="numeric" maxLength={4} value={captcha.answer} disabled={busy} placeholder={t("auth.captchaAnswerPlaceholder")} onChange={(event) => setCaptcha({ ...captcha, answer: event.target.value })} />
+                </label>
+              )}
+            </>
           )}
           {(view === "register" || view === "forgot") && (
             <>
-              <label className="auth-field">
-                <span>{view === "forgot" ? t("auth.newPassword") : t("auth.password")}</span>
-                <input type="password" value={password} disabled={busy} autoComplete="new-password" placeholder={view === "forgot" ? t("auth.newPasswordPlaceholder") : t("auth.passwordPlaceholder")} onChange={(event) => setPassword(event.target.value)} />
-              </label>
-              <label className="auth-field">
-                <span>{t("pwd.confirmLabel")}</span>
-                <input type="password" value={confirm} disabled={busy} autoComplete="new-password" placeholder={t("pwd.confirmPlaceholder")} onChange={(event) => setConfirm(event.target.value)} />
-              </label>
+              {passwordRow(
+                view === "forgot" ? t("auth.newPassword") : t("auth.password"),
+                view === "forgot" ? t("auth.newPasswordPlaceholder") : t("auth.passwordPlaceholder"),
+                "new-password",
+                password,
+                reveal,
+                () => setReveal(!reveal),
+                setPassword,
+              )}
+              {passwordRow(
+                t("pwd.confirmLabel"),
+                t("pwd.confirmPlaceholder"),
+                "new-password",
+                confirm,
+                revealConfirm,
+                () => setRevealConfirm(!revealConfirm),
+                setConfirm,
+              )}
               <label className="auth-field">
                 <span>{t("auth.code")}</span>
                 <span className="auth-code-row">
