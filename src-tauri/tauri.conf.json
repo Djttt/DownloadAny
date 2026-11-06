@@ -13,14 +13,14 @@
     "windows": [
       {
         "title": "DownloadAny",
-        "width": 1100,
-        "height": 680,
+        "width": 1045,
+        "height": 707,
         "minWidth": 1045,
-        "minHeight": 480
+        "minHeight": 707
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self' https://accounts.google.com; frame-src https://accounts.google.com; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:8000 https://accounts.google.com"
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:8000 http://127.0.0.1:8001"
     }
   },
   "bundle": {

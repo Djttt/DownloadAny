@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { getVersion } from "@tauri-apps/api/app";
@@ -12,7 +12,7 @@ import {
   type ProxyType,
 } from "../lib/settings";
 import { getLangPref, setLangPref, t, type LangPref } from "../lib/i18n";
-import { logout, restoreUser, type AuthUser } from "../lib/auth";
+import { changePassword, logout, restoreUser, type AuthUser } from "../lib/auth";
 import { AuthModal } from "./AuthModal";
 
 /* ========================================================================
@@ -197,6 +197,7 @@ export function SupportMenuItem() {
 export function AccountMenuItem() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<{ left: number; bottom: number } | null>(null);
   const entryRef = useRef<HTMLButtonElement>(null);
@@ -298,6 +299,16 @@ export function AccountMenuItem() {
               className="acc-row"
               type="button"
               onClick={() => {
+                setOpen(false);
+                setPasswordOpen(true);
+              }}
+            >
+              {user.hasPassword ? t("account.changePassword") : t("account.setPassword")}
+            </button>
+            <button
+              className="acc-row"
+              type="button"
+              onClick={() => {
                 setUser(null);
                 setOpen(false);
                 logout().catch(() => {});
@@ -315,31 +326,68 @@ export function AccountMenuItem() {
           onAuthenticated={setUser}
         />
       )}
+      {user && passwordOpen && (
+        <PasswordModal
+          hasPassword={user.hasPassword}
+          onClose={() => setPasswordOpen(false)}
+          onPasswordChanged={() => setUser({ ...user, hasPassword: true })}
+        />
+      )}
     </>
   );
 }
 
-/* ---- 设置密码:纯前端占位弹窗(校验后仅展示成功态，数据不上传) ---- */
+/* ---- 设置 / 修改密码 ---- */
 
-export function PasswordModal({ onClose }: { onClose: () => void }) {
+export function PasswordModal({
+  hasPassword,
+  onClose,
+  onPasswordChanged,
+}: {
+  hasPassword: boolean;
+  onClose: () => void;
+  onPasswordChanged: () => void;
+}) {
+  const [currentPwd, setCurrentPwd] = useState("");
   const [pwd, setPwd] = useState("");
   const [confirm, setConfirm] = useState("");
   const [revealPwd, setRevealPwd] = useState(false);
   const [revealConfirm, setRevealConfirm] = useState(false);
-  const [err, setErr] = useState<"empty" | "mismatch" | null>(null);
+  const [revealCurrent, setRevealCurrent] = useState(false);
+  const [currentError, setCurrentError] = useState<string | null>(null);
+  const [newError, setNewError] = useState<string | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const title = hasPassword ? t("account.changePassword") : t("account.setPassword");
 
-  function save() {
-    if (!pwd || !confirm) {
-      setErr("empty");
-      return;
+  function validateNewPassword(value: string): string | null {
+    if (!value) return t("pwd.required");
+    if (value.length < 10 || !/[A-Za-z]/.test(value) || !/\d/.test(value)) return t("pwd.weak");
+    return null;
+  }
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    const nextCurrentError = hasPassword && !currentPwd ? t("pwd.required") : null;
+    const nextNewError = validateNewPassword(pwd);
+    const nextConfirmError = !confirm ? t("pwd.required") : pwd !== confirm ? t("pwd.mismatch") : null;
+    setCurrentError(nextCurrentError);
+    setNewError(nextNewError);
+    setConfirmError(nextConfirmError);
+    if (nextCurrentError || nextNewError || nextConfirmError) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await changePassword(hasPassword ? currentPwd : null, pwd);
+      onPasswordChanged();
+      setDone(true);
+    } catch (reason) {
+      setErr(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setBusy(false);
     }
-    if (pwd !== confirm) {
-      setErr("mismatch");
-      return;
-    }
-    // TODO: 接入后端后在这里调用真实的设置密码接口
-    setDone(true);
   }
 
   function Eye({ off }: { off: boolean }) {
@@ -365,7 +413,8 @@ export function PasswordModal({ onClose }: { onClose: () => void }) {
     reveal: boolean,
     onValue: (v: string) => void,
     onToggle: () => void,
-    invalid: boolean,
+    errorMessage: string | null,
+    onBlur: () => void,
   ) {
     return (
       <div className="pwd-field">
@@ -373,11 +422,13 @@ export function PasswordModal({ onClose }: { onClose: () => void }) {
         <div className="pwd-wrap">
           <input
             id={id}
-            className={invalid ? "pwd-input invalid" : "pwd-input"}
+            className={errorMessage ? "pwd-input invalid" : "pwd-input"}
             type={reveal ? "text" : "password"}
             value={value}
             placeholder={placeholder}
-            autoComplete="off"
+            autoComplete={id === "pwd-current" ? "current-password" : "new-password"}
+            disabled={busy}
+            onBlur={onBlur}
             onChange={(e) => {
               onValue(e.target.value);
               if (err) setErr(null);
@@ -392,12 +443,15 @@ export function PasswordModal({ onClose }: { onClose: () => void }) {
             <Eye off={reveal} />
           </button>
         </div>
+        <p className="pwd-field-error" role={errorMessage ? "alert" : undefined}>
+          {errorMessage ?? ""}
+        </p>
       </div>
     );
   }
 
   return createPortal(
-    <Modal label={t("account.setPassword")} onClose={onClose}>
+    <Modal label={title} onClose={onClose}>
       {done ? (
         <div className="feedback-done">
           <svg viewBox="0 0 48 48" width="52" height="52" fill="none" aria-hidden>
@@ -410,8 +464,8 @@ export function PasswordModal({ onClose }: { onClose: () => void }) {
               strokeLinejoin="round"
             />
           </svg>
-          <h3>{t("pwd.doneTitle")}</h3>
-          <p>{t("pwd.doneDesc")}</p>
+          <h3>{hasPassword ? t("pwd.changedTitle") : t("pwd.doneTitle")}</h3>
+          <p>{hasPassword ? t("pwd.changedDesc") : t("pwd.doneDesc")}</p>
           <button className="primary" type="button" onClick={onClose}>
             {t("fb.close")}
           </button>
@@ -419,21 +473,33 @@ export function PasswordModal({ onClose }: { onClose: () => void }) {
       ) : (
         <>
           <header className="modal-head">
-            <h3>{t("account.setPassword")}</h3>
+            <h3>{title}</h3>
             <button className="clear" type="button" onClick={onClose} aria-label={t("common.close")}>
               {I.close}
             </button>
           </header>
-          <div className="modal-body">
+          <form className="modal-body" onSubmit={save}>
+            {hasPassword && field(
+              "pwd-current",
+              t("pwd.currentLabel"),
+              t("pwd.currentPlaceholder"),
+              currentPwd,
+              revealCurrent,
+              (value) => { setCurrentPwd(value); setCurrentError(null); },
+              () => setRevealCurrent(!revealCurrent),
+              currentError,
+              () => setCurrentError(currentPwd ? null : t("pwd.required")),
+            )}
             {field(
               "pwd-input",
-              t("pwd.label"),
+              hasPassword ? t("pwd.newLabel") : t("pwd.label"),
               t("pwd.placeholder"),
               pwd,
               revealPwd,
-              setPwd,
+              (value) => { setPwd(value); setNewError(null); },
               () => setRevealPwd(!revealPwd),
-              err === "empty",
+              newError,
+              () => setNewError(validateNewPassword(pwd)),
             )}
             {field(
               "pwd-confirm",
@@ -441,18 +507,18 @@ export function PasswordModal({ onClose }: { onClose: () => void }) {
               t("pwd.confirmPlaceholder"),
               confirm,
               revealConfirm,
-              setConfirm,
+              (value) => { setConfirm(value); setConfirmError(null); },
               () => setRevealConfirm(!revealConfirm),
-              err === "empty" || err === "mismatch",
+              confirmError,
+              () => setConfirmError(!confirm ? t("pwd.required") : pwd !== confirm ? t("pwd.mismatch") : null),
             )}
-            {err === "empty" && <p className="desc-error">{t("pwd.required")}</p>}
-            {err === "mismatch" && <p className="desc-error">{t("pwd.mismatch")}</p>}
+            <p className="desc-error pwd-error" role={err ? "alert" : undefined}>{err ?? ""}</p>
             <div className="pwd-actions">
-              <button className="primary" type="button" onClick={save}>
-                {t("pwd.save")}
+              <button className="primary" type="submit" disabled={busy}>
+                {busy ? t("auth.working") : t("pwd.save")}
               </button>
             </div>
-          </div>
+          </form>
         </>
       )}
     </Modal>,

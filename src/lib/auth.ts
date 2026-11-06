@@ -7,12 +7,14 @@ export interface AuthUser {
   id: number;
   email: string;
   emailVerified: boolean;
+  hasPassword: boolean;
 }
 
 interface ApiUser {
   id: number;
   email: string;
   email_verified: boolean;
+  has_password: boolean;
 }
 
 interface TokenResponse {
@@ -54,7 +56,12 @@ function clearSession(): void {
 }
 
 function userFromApi(user: ApiUser): AuthUser {
-  return { id: user.id, email: user.email, emailVerified: user.email_verified };
+  return {
+    id: user.id,
+    email: user.email,
+    emailVerified: user.email_verified,
+    hasPassword: user.has_password,
+  };
 }
 
 function errorMessage(body: unknown, fallback: string): string {
@@ -131,12 +138,45 @@ export async function verifyEmailCode(email: string, code: string): Promise<stri
   return result.message;
 }
 
-export async function loginWithGoogle(credential: string): Promise<AuthUser> {
-  const tokens = await request<TokenResponse>("/api/auth/google", {
+export async function sendLoginCode(email: string): Promise<string> {
+  const result = await request<{ message: string }>("/api/auth/login/code/send", {
     method: "POST",
-    body: JSON.stringify({ credential }),
+    body: JSON.stringify({ email }),
+  });
+  return result.message;
+}
+
+export async function loginWithCode(email: string, code: string): Promise<AuthUser> {
+  const tokens = await request<TokenResponse>("/api/auth/login/code", {
+    method: "POST",
+    body: JSON.stringify({ email, code }),
   });
   return acceptTokens(tokens);
+}
+
+export async function loginWithGoogle(authorization: {
+  code: string;
+  codeVerifier: string;
+  redirectUri: string;
+}): Promise<AuthUser> {
+  const tokens = await request<TokenResponse>("/api/auth/google/code", {
+    method: "POST",
+    body: JSON.stringify({
+      code: authorization.code,
+      code_verifier: authorization.codeVerifier,
+      redirect_uri: authorization.redirectUri,
+    }),
+  });
+  return acceptTokens(tokens);
+}
+
+export async function changePassword(currentPassword: string | null, newPassword: string): Promise<string> {
+  if (!session) throw new Error("登录状态已失效，请重新登录");
+  const result = await request<{ message: string }>("/api/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  }, session.accessToken);
+  return result.message;
 }
 
 export async function restoreUser(): Promise<AuthUser | null> {

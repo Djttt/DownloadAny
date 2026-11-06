@@ -8,6 +8,8 @@ use crate::resolve;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, State};
+use tauri_plugin_opener::OpenerExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[tauri::command]
 pub async fn probe_video(
@@ -79,6 +81,110 @@ pub async fn detect_proxy() -> Option<ProxyCandidate> {
         }
     }
     None
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GoogleAuthorizationCode {
+    code: String,
+    code_verifier: String,
+    redirect_uri: String,
+}
+
+/// 桌面 Google 登录：在系统浏览器中完成 OAuth，使用 PKCE 和随机 state，
+/// 再通过临时回环监听器接收授权码。客户端密钥不会、也不应打包进桌面应用。
+#[tauri::command]
+pub async fn google_oauth_login(
+    app: AppHandle,
+    client_id: String,
+) -> Result<GoogleAuthorizationCode, AppError> {
+    let client_id = client_id.trim();
+    if client_id.is_empty() || !client_id.ends_with(".apps.googleusercontent.com") {
+        return Err(AppError::GoogleAuth("Google OAuth 客户端 ID 未配置或格式无效".into()));
+    }
+
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await?;
+    let port = listener.local_addr()?.port();
+    let redirect_uri = format!("http://127.0.0.1:{port}");
+
+    use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+    use sha2::{Digest, Sha256};
+    let mut verifier_bytes = [0_u8; 32];
+    let mut state_bytes = [0_u8; 24];
+    getrandom::fill(&mut verifier_bytes)
+        .map_err(|error| AppError::GoogleAuth(format!("无法生成 PKCE 随机数：{error}")))?;
+    getrandom::fill(&mut state_bytes)
+        .map_err(|error| AppError::GoogleAuth(format!("无法生成登录状态随机数：{error}")))?;
+    let code_verifier = URL_SAFE_NO_PAD.encode(verifier_bytes);
+    let code_challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(code_verifier.as_bytes()));
+    let expected_state = URL_SAFE_NO_PAD.encode(state_bytes);
+
+    let mut authorize_url = url::Url::parse("https://accounts.google.com/o/oauth2/v2/auth")
+        .map_err(|error| AppError::GoogleAuth(error.to_string()))?;
+    authorize_url.query_pairs_mut()
+        .append_pair("client_id", client_id)
+        .append_pair("redirect_uri", &redirect_uri)
+        .append_pair("response_type", "code")
+        .append_pair("scope", "openid email profile")
+        .append_pair("code_challenge", &code_challenge)
+        .append_pair("code_challenge_method", "S256")
+        .append_pair("state", &expected_state)
+        .append_pair("access_type", "online")
+        .append_pair("prompt", "select_account");
+
+    app.opener()
+        .open_url(authorize_url.as_str(), None::<&str>)
+        .map_err(|error| AppError::GoogleAuth(format!("无法打开系统浏览器：{error}")))?;
+
+    let (mut stream, _) = tokio::time::timeout(
+        std::time::Duration::from_secs(180),
+        listener.accept(),
+    )
+    .await
+    .map_err(|_| AppError::GoogleAuth("Google 登录已超时，请重试".into()))??;
+
+    let mut request_bytes = vec![0_u8; 16 * 1024];
+    let read = stream.read(&mut request_bytes).await?;
+    let request = String::from_utf8_lossy(&request_bytes[..read]);
+    let request_target = request
+        .lines()
+        .next()
+        .and_then(|line| line.split_whitespace().nth(1))
+        .ok_or_else(|| AppError::GoogleAuth("无法解析 Google 登录回调".into()))?;
+    let callback_url = url::Url::parse(&format!("http://127.0.0.1{request_target}"))
+        .map_err(|error| AppError::GoogleAuth(format!("Google 登录回调无效：{error}")))?;
+    let params: std::collections::HashMap<_, _> = callback_url.query_pairs().into_owned().collect();
+
+    let callback_result = (|| {
+        if params.get("state") != Some(&expected_state) {
+            return Err(AppError::GoogleAuth("Google 登录状态校验失败，请重试".into()));
+        }
+        if let Some(error) = params.get("error") {
+            return Err(AppError::GoogleAuth(if error == "access_denied" {
+                "你已取消 Google 登录".into()
+            } else {
+                format!("Google 登录失败：{error}")
+            }));
+        }
+        params.get("code").cloned()
+            .ok_or_else(|| AppError::GoogleAuth("Google 未返回授权码".into()))
+    })();
+
+    let (status, page) = if callback_result.is_ok() {
+        ("200 OK", "<!doctype html><meta charset=utf-8><title>DownloadAny</title><style>body{font:16px system-ui;text-align:center;padding:64px;color:#202124}</style><h2>登录成功</h2><p>你可以关闭此页面并返回 DownloadAny。</p>")
+    } else {
+        ("400 Bad Request", "<!doctype html><meta charset=utf-8><title>DownloadAny</title><style>body{font:16px system-ui;text-align:center;padding:64px;color:#b3261e}</style><h2>登录未完成</h2><p>请关闭此页面并返回 DownloadAny 重试。</p>")
+    };
+    let response = format!(
+        "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{page}",
+        page.len()
+    );
+    stream.write_all(response.as_bytes()).await?;
+    Ok(GoogleAuthorizationCode {
+        code: callback_result?,
+        code_verifier,
+        redirect_uri,
+    })
 }
 
 #[tauri::command]

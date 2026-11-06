@@ -35,6 +35,15 @@ export const dependencyInfo = () => invoke<DependencyInfo>("dependency_info");
 
 export const detectProxy = () => invoke<ProxyCandidate | null>("detect_proxy");
 
+export interface GoogleAuthorizationCode {
+  code: string;
+  codeVerifier: string;
+  redirectUri: string;
+}
+
+export const googleOAuthLogin = (clientId: string) =>
+  invoke<GoogleAuthorizationCode>("google_oauth_login", { clientId });
+
 // ---- events ----
 
 export const onJobStatus = (handler: (e: StatusEvent) => void) =>

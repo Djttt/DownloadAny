@@ -27,7 +27,8 @@ pub fn run() {
             commands::set_max_concurrency,
             commands::open_download_location,
             commands::dependency_info,
-            commands::detect_proxy
+            commands::detect_proxy,
+            commands::google_oauth_login
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

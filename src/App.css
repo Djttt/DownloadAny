@@ -313,7 +313,6 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   padding: 22px 28px 0;
-  max-width: 1100px;
   height: 100%;
   overflow: hidden;
 }
@@ -696,8 +695,7 @@ select:focus-visible {
   flex: 0 0 33.333333%;
   display: flex;
   flex-direction: column;
-  justify-content: space-evenly;
-  gap: 5px;
+  justify-content: space-around;
 }
 
 .platform-track {
@@ -1425,9 +1423,11 @@ select:focus-visible {
 
 .menu-host {
   position: relative;
+  width: 100%;
 }
 
 .menu-row {
+  width: 100%;
   position: relative;
   display: flex;
   align-items: center;
@@ -1733,21 +1733,27 @@ select:focus-visible {
 }
 
 .auth-code-row button:disabled {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: 0.55;
+}
+
+.auth-feedback {
+  height: 18px;
+  margin-bottom: 8px;
+  overflow: hidden;
 }
 
 .auth-notice,
 .auth-error {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .auth-notice {
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: #eef7ee;
   color: #28723a;
 }
 
@@ -1959,7 +1965,7 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 7px;
-  margin-bottom: 16px;
+  margin-bottom: 6px;
 }
 
 .pwd-field label {
@@ -2028,6 +2034,26 @@ select:focus-visible {
   width: auto;
   min-width: 120px;
   padding: 10px 26px;
+}
+
+.pwd-actions .primary:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.pwd-field-error {
+  min-height: 18px;
+  margin: -2px 0 0;
+  color: var(--red);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.pwd-error {
+  min-height: 18px;
+  margin: 0 0 6px;
+  line-height: 18px;
+  text-align: center;
 }
 
 .feedback-done {

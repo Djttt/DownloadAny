@@ -21,6 +21,7 @@ const zh = {
   "account.plan": "Free",
   "account.personal": "个人中心",
   "account.setPassword": "设置密码",
+  "account.changePassword": "修改密码",
   "account.logout": "退出登录",
   "account.todo": "功能待接入",
 
@@ -43,6 +44,7 @@ const zh = {
   "auth.codeLogin": "验证码登录",
   "auth.passwordLogin": "密码登录",
   "auth.sendCode": "获取验证码",
+  "auth.sendCodeCountdown": "{seconds}s 后重发",
   "auth.codeLoginButton": "登录 / 注册",
   "auth.codeLoginUnsupported": "验证码校验成功，但当前后端尚未提供验证码换取登录令牌的接口",
   "auth.emailRequired": "请输入邮箱地址",
@@ -59,6 +61,9 @@ const zh = {
 
   // 设置密码弹窗
   "pwd.label": "密码",
+  "pwd.currentLabel": "当前密码",
+  "pwd.currentPlaceholder": "请输入当前密码",
+  "pwd.newLabel": "新密码",
   "pwd.confirmLabel": "确认密码",
   "pwd.placeholder": "请输入密码",
   "pwd.confirmPlaceholder": "请再次输入密码",
@@ -66,9 +71,12 @@ const zh = {
   "pwd.hide": "隐藏密码",
   "pwd.required": "请先填写密码",
   "pwd.mismatch": "两次输入的密码不一致",
+  "pwd.weak": "密码至少 10 位，并且必须同时包含字母和数字",
   "pwd.save": "保存",
   "pwd.doneTitle": "密码设置成功！",
-  "pwd.doneDesc": "当前为纯前端演示，密码未上传到任何服务器。",
+  "pwd.doneDesc": "现在可以使用邮箱和密码登录。",
+  "pwd.changedTitle": "密码修改成功！",
+  "pwd.changedDesc": "其他设备上的登录会话已退出。",
 
   // 客服飞窗
   "fly.telegram": "Telegram 社区",
@@ -223,6 +231,7 @@ const en: Record<TKey, string> = {
   "account.plan": "Free",
   "account.personal": "Account",
   "account.setPassword": "Set password",
+  "account.changePassword": "Change password",
   "account.logout": "Sign out",
   "account.todo": "Coming soon",
 
@@ -244,6 +253,7 @@ const en: Record<TKey, string> = {
   "auth.codeLogin": "Email code",
   "auth.passwordLogin": "Password",
   "auth.sendCode": "Send code",
+  "auth.sendCodeCountdown": "Retry in {seconds}s",
   "auth.codeLoginButton": "Sign in / Register",
   "auth.codeLoginUnsupported": "Code verified, but the server does not yet provide an endpoint that exchanges it for login tokens",
   "auth.emailRequired": "Enter your email address",
@@ -259,6 +269,9 @@ const en: Record<TKey, string> = {
   "auth.working": "Please wait…",
 
   "pwd.label": "Password",
+  "pwd.currentLabel": "Current password",
+  "pwd.currentPlaceholder": "Enter current password",
+  "pwd.newLabel": "New password",
   "pwd.confirmLabel": "Confirm password",
   "pwd.placeholder": "Enter password",
   "pwd.confirmPlaceholder": "Re-enter password",
@@ -266,9 +279,12 @@ const en: Record<TKey, string> = {
   "pwd.hide": "Hide password",
   "pwd.required": "Please enter a password first",
   "pwd.mismatch": "Passwords do not match",
+  "pwd.weak": "Use at least 10 characters with both letters and numbers",
   "pwd.save": "Save",
   "pwd.doneTitle": "Password set successfully!",
-  "pwd.doneDesc": "Front-end demo only — nothing was uploaded.",
+  "pwd.doneDesc": "You can now sign in with your email and password.",
+  "pwd.changedTitle": "Password changed!",
+  "pwd.changedDesc": "Sessions on your other devices have been signed out.",
 
   "fly.telegram": "Telegram Community",
   "fly.discord": "Discord Community",

@@ -85,7 +85,8 @@ export function PlatformWall() {
 
   useLayoutEffect(() => {
     const el = scroller.current;
-    if (!el) return;
+    const rows = rowsRef.current;
+    if (!el || !rows) return;
     const { x, y } = loopSize(el);
     el.scrollLeft = x;
     el.scrollTop = y;

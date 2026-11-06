@@ -24,6 +24,8 @@ pub enum AppError {
     Parse(String),
     #[error("任务不存在: {0}")]
     JobNotFound(u64),
+    #[error("Google 登录失败：{0}")]
+    GoogleAuth(String),
     #[error("IO 错误：{0}")]
     Io(#[from] std::io::Error),
 }

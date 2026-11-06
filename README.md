@@ -2,6 +2,23 @@
 
 基于 **Tauri v2 + yt-dlp** 的跨平台桌面视频下载器（Windows / macOS / Linux）。
 
+## Google 登录
+
+桌面端使用系统浏览器完成 Google OAuth，并通过本机临时回环地址返回应用。请在
+Google Cloud Console 创建 OAuth 2.0 **桌面应用**客户端，然后把同一个客户端 ID
+分别写入：
+
+```dotenv
+# DownloadAny/.env
+VITE_GOOGLE_CLIENT_ID=你的客户端ID.apps.googleusercontent.com
+
+# DownloadAny-BackEnd/.env
+GOOGLE_CLIENT_ID=你的客户端ID.apps.googleusercontent.com
+```
+
+桌面应用属于公共客户端，不要把 Google 客户端密钥写入前端或打包进应用。修改环境
+变量后需要重启桌面端开发进程和后端服务。
+
 ## 项目背景
 
 [yt-dlp](https://github.com/yt-dlp/yt-dlp) 是最强的命令行视频下载引擎，支持上千个站点，但它没有界面——普通用户面对几十个专业参数无从下手，进阶用户也需要一个能管理队列、展示进度、持久配置的载体。
