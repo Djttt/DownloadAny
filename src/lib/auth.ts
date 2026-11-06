@@ -123,10 +123,27 @@ export async function resendVerification(email: string): Promise<string> {
   return result.message;
 }
 
-export async function verifyEmailCode(email: string, code: string): Promise<string> {
-  const result = await request<{ message: string }>("/api/auth/verification/code", {
+// 验证成功后端当场签发登录令牌：验证即登录。
+export async function verifyEmailCode(email: string, code: string): Promise<AuthUser> {
+  const tokens = await request<TokenResponse>("/api/auth/verification/code", {
     method: "POST",
     body: JSON.stringify({ email, code }),
+  });
+  return acceptTokens(tokens);
+}
+
+export async function forgotPassword(email: string): Promise<string> {
+  const result = await request<{ message: string }>("/api/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+  return result.message;
+}
+
+export async function resetPasswordByEmailCode(email: string, code: string, newPassword: string): Promise<string> {
+  const result = await request<{ message: string }>("/api/auth/reset-password/code", {
+    method: "POST",
+    body: JSON.stringify({ email, code, new_password: newPassword }),
   });
   return result.message;
 }

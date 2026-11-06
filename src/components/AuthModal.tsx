@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  forgotPassword,
   GOOGLE_CLIENT_ID,
   loginWithGoogle,
   loginWithPassword,
-  resendVerification,
+  register,
+  resetPasswordByEmailCode,
   verifyEmailCode,
   type AuthUser,
 } from "../lib/auth";
@@ -24,7 +26,7 @@ declare global {
   }
 }
 
-type LoginMethod = "code" | "password";
+type AuthView = "register" | "password" | "forgot";
 
 function loadGoogleIdentity(): Promise<void> {
   if (window.google) return Promise.resolve();
@@ -46,9 +48,10 @@ function loadGoogleIdentity(): Promise<void> {
 }
 
 export function AuthModal({ onClose, onAuthenticated }: { onClose: () => void; onAuthenticated: (user: AuthUser) => void }) {
-  const [loginMethod, setLoginMethod] = useState<LoginMethod>("code");
+  const [view, setView] = useState<AuthView>("register");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,43 +105,86 @@ export function AuthModal({ onClose, onAuthenticated }: { onClose: () => void; o
     }
   }
 
+  function switchView(next: AuthView) {
+    setView(next);
+    setError(null);
+    setNotice(null);
+    setPassword("");
+    setConfirm("");
+    setCode("");
+  }
+
+  async function runMessage(action: () => Promise<string>) {
+    setBusy(true);
+    setError(null);
+    try {
+      setNotice(await action());
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function trimmedEmail(): string | null {
+    const value = email.trim().toLowerCase();
+    if (!value) {
+      setError(t("auth.emailRequired"));
+      return null;
+    }
+    return value;
+  }
+
+  function validateNewPassword(): boolean {
+    if (password.length < 10) {
+      setError(t("auth.passwordLength"));
+      return false;
+    }
+    if (password !== confirm) {
+      setError(t("pwd.mismatch"));
+      return false;
+    }
+    return true;
+  }
+
+  async function sendRegisterCode() {
+    const normalized = trimmedEmail();
+    if (!normalized) return;
+    if (!validateNewPassword()) return;
+    await runMessage(() => register(normalized, password));
+  }
+
+  async function sendForgotCode() {
+    const normalized = trimmedEmail();
+    if (!normalized) return;
+    await runMessage(() => forgotPassword(normalized));
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
     setNotice(null);
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail) return setError(t("auth.emailRequired"));
-    if (loginMethod === "password") {
+    if (view === "password") {
       if (!password) return setError(t("auth.passwordRequired"));
       return run(() => loginWithPassword(normalizedEmail, password));
     }
     if (!/^\d{6}$/.test(code)) return setError(t("auth.codeInvalid"));
+    if (view === "register") {
+      return run(() => verifyEmailCode(normalizedEmail, code));
+    }
+    if (!validateNewPassword()) return;
     setBusy(true);
     try {
-      await verifyEmailCode(normalizedEmail, code);
-      setError(t("auth.codeLoginUnsupported"));
+      const message = await resetPasswordByEmailCode(normalizedEmail, code, password);
+      switchView("password");
+      setNotice(message);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
       setBusy(false);
     }
-  }
-
-  async function resend() {
-    setBusy(true);
-    setError(null);
-    try {
-      setNotice(await resendVerification(email.trim().toLowerCase()));
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function sendLoginCode() {
-    if (!email.trim()) return setError(t("auth.emailRequired"));
-    await resend();
   }
 
   return createPortal(
@@ -159,10 +205,10 @@ export function AuthModal({ onClose, onAuthenticated }: { onClose: () => void; o
           )}
           <div className="auth-divider"><span>{t("auth.orEmail")}</span></div>
           <div className="auth-method-tabs" role="tablist" aria-label={t("auth.methodLabel")}>
-            <button className={loginMethod === "code" ? "on" : ""} type="button" role="tab" aria-selected={loginMethod === "code"} onClick={() => { setLoginMethod("code"); setError(null); setNotice(null); }}>
-              {t("auth.codeLogin")}
+            <button className={view === "register" ? "on" : ""} type="button" role="tab" aria-selected={view === "register"} onClick={() => switchView("register")}>
+              {t("auth.registerTitle")}
             </button>
-            <button className={loginMethod === "password" ? "on" : ""} type="button" role="tab" aria-selected={loginMethod === "password"} onClick={() => { setLoginMethod("password"); setError(null); setNotice(null); }}>
+            <button className={view !== "register" ? "on" : ""} type="button" role="tab" aria-selected={view !== "register"} onClick={() => switchView("password")}>
               {t("auth.passwordLogin")}
             </button>
           </div>
@@ -170,25 +216,44 @@ export function AuthModal({ onClose, onAuthenticated }: { onClose: () => void; o
             <span>{t("auth.email")}</span>
             <input type="email" value={email} disabled={busy} autoComplete="email" placeholder="name@example.com" onChange={(event) => setEmail(event.target.value)} />
           </label>
-          {loginMethod === "code" ? (
-            <label className="auth-field">
-              <span>{t("auth.code")}</span>
-              <span className="auth-code-row">
-                <input className="auth-code" inputMode="numeric" maxLength={6} value={code} disabled={busy} autoComplete="one-time-code" placeholder="000000" onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} />
-                <button type="button" disabled={busy} onClick={sendLoginCode}>{t("auth.sendCode")}</button>
-              </span>
-            </label>
-          ) : (
+          {view === "password" && (
             <label className="auth-field">
               <span>{t("auth.password")}</span>
               <input type="password" value={password} disabled={busy} autoComplete="current-password" placeholder={t("auth.passwordPlaceholder")} onChange={(event) => setPassword(event.target.value)} />
             </label>
           )}
+          {(view === "register" || view === "forgot") && (
+            <>
+              <label className="auth-field">
+                <span>{view === "forgot" ? t("auth.newPassword") : t("auth.password")}</span>
+                <input type="password" value={password} disabled={busy} autoComplete="new-password" placeholder={view === "forgot" ? t("auth.newPasswordPlaceholder") : t("auth.passwordPlaceholder")} onChange={(event) => setPassword(event.target.value)} />
+              </label>
+              <label className="auth-field">
+                <span>{t("pwd.confirmLabel")}</span>
+                <input type="password" value={confirm} disabled={busy} autoComplete="new-password" placeholder={t("pwd.confirmPlaceholder")} onChange={(event) => setConfirm(event.target.value)} />
+              </label>
+              <label className="auth-field">
+                <span>{t("auth.code")}</span>
+                <span className="auth-code-row">
+                  <input className="auth-code" inputMode="numeric" maxLength={6} value={code} disabled={busy} autoComplete="one-time-code" placeholder="000000" onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} />
+                  <button type="button" disabled={busy} onClick={view === "forgot" ? sendForgotCode : sendRegisterCode}>
+                    {view === "forgot" ? t("auth.sendCode") : t("auth.register")}
+                  </button>
+                </span>
+              </label>
+            </>
+          )}
           {notice && <p className="auth-notice">{notice}</p>}
           {error && <p className="desc-error auth-error">{error}</p>}
           <button className="primary auth-submit" type="submit" disabled={busy}>
-            {busy ? t("auth.working") : loginMethod === "code" ? t("auth.codeLoginButton") : t("auth.login")}
+            {busy ? t("auth.working") : view === "register" ? t("auth.verifyAndLogin") : view === "forgot" ? t("auth.resetButton") : t("auth.login")}
           </button>
+          {view === "password" && (
+            <button className="auth-link" type="button" disabled={busy} onClick={() => switchView("forgot")}>{t("auth.forgotPassword")}</button>
+          )}
+          {view === "forgot" && (
+            <button className="auth-link" type="button" disabled={busy} onClick={() => switchView("password")}>{t("auth.backToLogin")}</button>
+          )}
         </form>
       </div>
     </div>,
