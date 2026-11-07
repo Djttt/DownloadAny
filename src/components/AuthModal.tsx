@@ -18,8 +18,17 @@ import { googleOAuthLogin } from "../lib/tauri";
 import { EyeIcon } from "./EyeIcon";
 
 type AuthView = "code" | "register" | "password" | "forgot";
+type MessageType = "success" | "error";
 
-export function AuthModal({ onClose, onAuthenticated }: { onClose: () => void; onAuthenticated: (user: AuthUser) => void }) {
+export function AuthModal({
+  onClose,
+  onAuthenticated,
+  onMessage,
+}: {
+  onClose: () => void;
+  onAuthenticated: (user: AuthUser) => void;
+  onMessage: (message: string, type: MessageType) => void;
+}) {
   const [view, setView] = useState<AuthView>("code");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,8 +39,8 @@ export function AuthModal({ onClose, onAuthenticated }: { onClose: () => void; o
   const [revealConfirm, setRevealConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [codeCooldown, setCodeCooldown] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const setError = (message: string | null) => message && onMessage(message, "error");
+  const setNotice = (message: string | null) => message && onMessage(message, "success");
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => event.key === "Escape" && onClose();
@@ -300,10 +309,6 @@ export function AuthModal({ onClose, onAuthenticated }: { onClose: () => void; o
               </label>
             </>
           )}
-          <div className="auth-feedback" aria-live="polite">
-            {notice && <p className="auth-notice">{notice}</p>}
-            {error && <p className="desc-error auth-error">{error}</p>}
-          </div>
           <button className="primary auth-submit" type="submit" disabled={busy}>
             {busy ? t("auth.working") : view === "code" ? t("auth.codeLoginButton") : view === "register" ? t("auth.verifyAndLogin") : view === "forgot" ? t("auth.resetButton") : t("auth.login")}
           </button>

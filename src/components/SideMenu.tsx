@@ -14,8 +14,7 @@ import {
 } from "../lib/settings";
 import { getLangPref, setLangPref, t, type LangPref } from "../lib/i18n";
 import { getThemePref, setThemePref, type ThemePref } from "../lib/theme";
-import { changePassword, logout, restoreUser, type AuthUser } from "../lib/auth";
-import { AuthModal } from "./AuthModal";
+import { changePassword, logout, type AuthUser } from "../lib/auth";
 import { EyeIcon } from "./EyeIcon";
 
 /* ========================================================================
@@ -197,23 +196,22 @@ export function SupportMenuItem() {
 
 /* ---- 账户入口:未登录打开登录窗口;已登录悬停弹出账户卡片 ---- */
 
-export function AccountMenuItem() {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [authOpen, setAuthOpen] = useState(false);
+export function AccountMenuItem({
+  user,
+  onUserChange,
+  onRequestLogin,
+}: {
+  user: AuthUser | null;
+  onUserChange: (user: AuthUser | null) => void;
+  onRequestLogin: () => void;
+}) {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<{ left: number; bottom: number } | null>(null);
   const entryRef = useRef<HTMLButtonElement>(null);
   const closeTimer = useRef(0);
 
-  useEffect(() => {
-    let alive = true;
-    restoreUser().then((restored) => alive && setUser(restored)).catch(() => {});
-    return () => {
-      alive = false;
-      window.clearTimeout(closeTimer.current);
-    };
-  }, []);
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
 
   const displayName = user?.email.split("@")[0] ?? "";
 
@@ -251,7 +249,7 @@ export function AccountMenuItem() {
         title={user ? undefined : t("account.title")}
         onMouseEnter={user ? showCard : undefined}
         onMouseLeave={user ? scheduleClose : undefined}
-        onClick={() => !user && setAuthOpen(true)}
+        onClick={() => !user && onRequestLogin()}
       >
         <span className="account-avatar" aria-hidden>
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
@@ -312,7 +310,7 @@ export function AccountMenuItem() {
               className="acc-row"
               type="button"
               onClick={() => {
-                setUser(null);
+                onUserChange(null);
                 setOpen(false);
                 logout().catch(() => {});
               }}
@@ -323,17 +321,11 @@ export function AccountMenuItem() {
           document.body,
         )
       )}
-      {authOpen && (
-        <AuthModal
-          onClose={() => setAuthOpen(false)}
-          onAuthenticated={setUser}
-        />
-      )}
       {user && passwordOpen && (
         <PasswordModal
           hasPassword={user.hasPassword}
           onClose={() => setPasswordOpen(false)}
-          onPasswordChanged={() => setUser({ ...user, hasPassword: true })}
+          onPasswordChanged={() => onUserChange({ ...user, hasPassword: true })}
         />
       )}
     </>

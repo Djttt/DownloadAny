@@ -34,7 +34,9 @@ import {
 import { setLangPref, t, useLang } from "./lib/i18n";
 import { setThemePref } from "./lib/theme";
 import { trackAnalyticsEvent } from "./lib/analytics";
+import { restoreUser, type AuthUser } from "./lib/auth";
 import { UrlBar } from "./components/UrlBar";
+import { AuthModal } from "./components/AuthModal";
 import { FormatBar } from "./components/VideoCard";
 import { QueueList } from "./components/QueueList";
 import { PlatformWall } from "./components/PlatformWall";
@@ -53,6 +55,7 @@ const TERMINAL: JobRecord["status"][] = ["completed", "failed", "cancelled"];
 type View = "download" | "history";
 type Dialog = "feedback" | "settings";
 type ParsedVideo = { key: string; order: number; url: string; info: VideoInfo };
+type AppMessage = { id: number; text: string; type: "success" | "error" | "info" };
 
 function App() {
   useLang(); // 订阅语言切换：偏好变化时整树重渲染
@@ -76,6 +79,31 @@ function App() {
   const trackedTerminalEvents = useRef(new Set<string>());
   const [view, setView] = useState<View>("download");
   const [dialog, setDialog] = useState<Dialog | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authOpen, setAuthOpen] = useState(false);
+  const pendingParse = useRef<string[] | null>(null);
+  const [message, setMessage] = useState<AppMessage | null>(null);
+  const messageTimer = useRef(0);
+
+  function showMessage(text: string, type: AppMessage["type"]) {
+    window.clearTimeout(messageTimer.current);
+    setMessage({ id: Date.now(), text, type });
+    messageTimer.current = window.setTimeout(() => setMessage(null), 4500);
+  }
+
+  useEffect(() => {
+    let alive = true;
+    restoreUser()
+      .then((restored) => {
+        if (alive) setUser(restored);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => () => window.clearTimeout(messageTimer.current), []);
 
   useEffect(() => {
     (async () => {
@@ -183,6 +211,18 @@ function App() {
 
   /** 探测；自动模式下直接以首个格式（最佳画质+音频）入队 */
   async function handleStart(urls: string[]) {
+    const activeUser = await restoreUser();
+    setUser(activeUser);
+    if (!activeUser) {
+      pendingParse.current = urls;
+      showMessage(t("auth.loginToParse"), "info");
+      setAuthOpen(true);
+      return;
+    }
+    await startParse(urls);
+  }
+
+  async function startParse(urls: string[]) {
     setBusy(true);
     setError(null);
     setVideos([]);
@@ -358,6 +398,13 @@ function App() {
 
   return (
     <div className="shell">
+      {message && (
+        <div key={message.id} className={`app-message ${message.type}`} role="alert" aria-live="assertive">
+          <span className="app-message-icon" aria-hidden>{message.type === "success" ? "✓" : message.type === "error" ? "!" : "i"}</span>
+          <span>{message.text}</span>
+          <button type="button" aria-label={t("common.close")} onClick={() => setMessage(null)}>×</button>
+        </div>
+      )}
       <aside className="side">
         <div className="brand">
           <span className="gem" aria-hidden>
@@ -416,7 +463,7 @@ function App() {
             <span>{t("menu.settings")}</span>
           </button>
         </div>
-        <AccountMenuItem />
+        <AccountMenuItem user={user} onUserChange={setUser} onRequestLogin={() => setAuthOpen(true)} />
       </aside>
 
       <main className="main">
@@ -480,6 +527,22 @@ function App() {
       </main>
 
       {dialog === "feedback" && <FeedbackModal onClose={() => setDialog(null)} />}
+      {authOpen && (
+        <AuthModal
+          onClose={() => {
+            setAuthOpen(false);
+            pendingParse.current = null;
+          }}
+          onAuthenticated={(authenticatedUser) => {
+            setUser(authenticatedUser);
+            showMessage(t("auth.loginSuccess"), "success");
+            const urls = pendingParse.current;
+            pendingParse.current = null;
+            if (urls) void startParse(urls);
+          }}
+          onMessage={showMessage}
+        />
+      )}
       {dialog === "settings" && (
         <SettingsModal
           outputDir={outputDir}

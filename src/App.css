@@ -131,6 +131,85 @@ select:focus-visible {
   overflow: hidden;
 }
 
+/* 顶部全局消息：高于弹窗遮罩，错误信息不再挤占弹窗底部空间。 */
+.app-message {
+  position: fixed;
+  z-index: 120;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: max-content;
+  max-width: min(560px, calc(100vw - 32px));
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.16);
+  font-size: 13px;
+  line-height: 20px;
+  animation: message-in 0.2s ease-out;
+}
+
+.app-message > span:nth-child(2) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.app-message-icon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.app-message.error .app-message-icon {
+  background: var(--red);
+}
+
+.app-message.success .app-message-icon {
+  background: var(--green);
+}
+
+.app-message.info .app-message-icon {
+  background: var(--indigo);
+}
+
+.app-message button {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.app-message button:hover {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+@keyframes message-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
 /* ---- 侧栏 ---- */
 
 .side {
@@ -1814,12 +1893,6 @@ select:focus-visible {
   opacity: 0.55;
 }
 
-.auth-feedback {
-  height: 18px;
-  margin-bottom: 8px;
-  overflow: hidden;
-}
-
 .auth-pwd {
   position: relative;
   display: block;
@@ -1827,20 +1900,6 @@ select:focus-visible {
 
 .auth-pwd input {
   padding-right: 42px;
-}
-
-.auth-notice,
-.auth-error {
-  margin: 0;
-  font-size: 12px;
-  line-height: 18px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.auth-notice {
-  color: #28723a;
 }
 
 .auth-submit:disabled,
