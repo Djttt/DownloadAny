@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 256 256">
+  <title>DownloadAny</title>
+  <desc>应用图标母版，转录自 Figma「DownloadAny Icons」文件的 App Icon 页母版 frame（坐标 1:1）。规范：squircle r23.4%（256 网格下 rx=60）；底色 indigo token #0052D9；白色下载箭头 + 负空间播放三角；tray tick amber token #ED7B2F。本文件同时是 index.html 的 favicon 源。改完后重新生成全套桌面图标：pnpm tauri icon public/app-icon.svg</desc>
+  <rect width="256" height="256" rx="60" fill="#0052D9" />
+  <path d="M109 50H147V130H177L128 186L79 130H109V50Z" fill="#FFFFFF" />
+  <path d="M112 138L142 153L112 168V138Z" fill="#0052D9" />
+  <rect x="52" y="198" width="152" height="15" rx="7.5" fill="#FFFFFF" />
+  <rect x="52" y="198" width="56" height="15" rx="7.5" fill="#ED7B2F" />
+</svg>

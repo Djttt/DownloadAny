@@ -3,6 +3,7 @@ import type { JobRecord } from "../types";
 import { fmtBytes, fmtEta, fmtSpeed } from "../lib/format";
 import { openDownloadLocation } from "../lib/tauri";
 import { t } from "../lib/i18n";
+import { Icon } from "./Icon";
 
 const STATUS_TEXT = {
   queued: "status.queued",
@@ -94,9 +95,7 @@ function JobRow({
       <span className="c-act">
         {active && (
           <button className="icon" aria-label={t("queue.stop")} title={t("queue.stop")} onClick={() => onCancel(job.id)}>
-            <svg viewBox="0 0 16 16" width="13" height="13">
-              <rect x="4.5" y="4.5" width="7" height="7" rx="1" fill="currentColor" />
-            </svg>
+            <Icon name="stop" size={13} />
           </button>
         )}
         {job.status === "completed" && (job.outputPath || outputDir) && (
@@ -106,26 +105,12 @@ function JobRow({
             title={t("queue.reveal")}
             onClick={() => openDownloadLocation(job.outputPath ?? "", outputDir).catch(console.error)}
           >
-            <svg viewBox="0 0 16 16" width="14" height="14" fill="none">
-              <path
-                d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.6l1.2 1.5h5.2A1.5 1.5 0 0 1 14 6v5.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5v-7Z"
-                stroke="currentColor"
-                strokeWidth="1.3"
-              />
-            </svg>
+            <Icon name="folder-reveal" size={14} />
           </button>
         )}
         {(job.status === "failed" || job.status === "cancelled") && (
           <button className="icon" aria-label={t("queue.retry")} title={t("queue.retry")} onClick={() => onRetry(job)}>
-            <svg viewBox="0 0 16 16" width="14" height="14" fill="none">
-              <path
-                d="M13 8a5 5 0 1 1-1.7-3.75M13 2.5V5h-2.5"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <Icon name="retry" size={14} />
           </button>
         )}
         <button
@@ -135,11 +120,7 @@ function JobRow({
           title={open ? t("queue.logCollapse") : t("queue.logView")}
           onClick={() => setOpen(!open)}
         >
-          <svg viewBox="0 0 16 16" width="14" height="14">
-            {[3, 8, 13].map((x) => (
-              <circle key={x} cx={x} cy="8" r="1.2" fill="currentColor" />
-            ))}
-          </svg>
+          <Icon name="log" size={14} />
         </button>
       </span>
       {open && (
