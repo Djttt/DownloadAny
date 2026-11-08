@@ -409,13 +409,7 @@ function App() {
       <aside className="side">
         <div className="brand">
           <span className="gem" aria-hidden>
-            <svg viewBox="0 0 20 20" width="16" height="16">
-              <path
-                d="M10 3.5 16.5 10 10 16.5 3.5 10 10 3.5Z"
-                fill="currentColor"
-                opacity=".9"
-              />
-            </svg>
+            <Icon name="app-arrow" size={16} />
           </span>
           <span className="word">DownloadAny</span>
         </div>

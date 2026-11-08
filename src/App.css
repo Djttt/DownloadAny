@@ -243,7 +243,7 @@ select:focus-visible {
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 9px;
+  border-radius: 23.4%; /* 与 app-icon.svg 母版同比例：rx 60 / 256 */
   background: var(--indigo);
 }
 
@@ -2563,6 +2563,20 @@ select:focus-visible {
   flex-direction: column;
   gap: 22px;
   padding-top: 6px;
+}
+
+.about-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+
+.about-brand .gem {
+  width: 40px;
+  height: 40px;
 }
 
 .about-row {

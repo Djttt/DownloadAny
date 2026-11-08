@@ -942,6 +942,12 @@ function AboutPane() {
 
   return (
     <div className="about-list">
+      <div className="about-brand">
+        <span className="gem" aria-hidden>
+          <Icon name="app-arrow" size={22} />
+        </span>
+        <span>DownloadAny</span>
+      </div>
       {rows.map(([k, v]) => (
         <div className="about-row" key={k}>
           <span className="k">{k}</span>
