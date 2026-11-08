@@ -102,7 +102,8 @@ async fn http_connect_probe(proxy: &str, host: &str) -> Result<(), String> {
     let mut stream = TcpStream::connect(proxy)
         .await
         .map_err(|e| format!("连不上代理 {proxy}：{e}"))?;
-    let req = format!("CONNECT {host}:{CONNECT_PORT} HTTP/1.1\r\nHost: {host}:{CONNECT_PORT}\r\n\r\n");
+    let req =
+        format!("CONNECT {host}:{CONNECT_PORT} HTTP/1.1\r\nHost: {host}:{CONNECT_PORT}\r\n\r\n");
     stream
         .write_all(req.as_bytes())
         .await
@@ -129,9 +130,15 @@ async fn socks5_connect_probe(proxy: &str, host: &str) -> Result<(), String> {
         .await
         .map_err(|e| format!("连不上代理 {proxy}：{e}"))?;
     // greeting：仅提议 no-auth
-    stream.write_all(&[0x05, 0x01, 0x00]).await.map_err(|e| e.to_string())?;
+    stream
+        .write_all(&[0x05, 0x01, 0x00])
+        .await
+        .map_err(|e| e.to_string())?;
     let mut greeting = [0u8; 2];
-    stream.read_exact(&mut greeting).await.map_err(|e| e.to_string())?;
+    stream
+        .read_exact(&mut greeting)
+        .await
+        .map_err(|e| e.to_string())?;
     if greeting != [0x05, 0x00] {
         return Err(format!(
             "SOCKS5 握手失败（要求鉴权或非 SOCKS5 端口）：{greeting:02x?}"
@@ -144,7 +151,10 @@ async fn socks5_connect_probe(proxy: &str, host: &str) -> Result<(), String> {
     stream.write_all(&req).await.map_err(|e| e.to_string())?;
     // 响应地址字段长度随 ATYP 变化，只取 ver|rep|rsv 前三字节判状态码
     let mut head = [0u8; 3];
-    stream.read_exact(&mut head).await.map_err(|e| e.to_string())?;
+    stream
+        .read_exact(&mut head)
+        .await
+        .map_err(|e| e.to_string())?;
     if head[0] != 0x05 {
         return Err("SOCKS5 响应格式异常".into());
     }

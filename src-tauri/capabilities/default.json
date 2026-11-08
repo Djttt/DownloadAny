@@ -8,12 +8,7 @@
     "opener:default",
     "dialog:default",
     "store:default",
-    {
-      "identifier": "shell:allow-spawn",
-      "allow": [
-        { "name": "binaries/yt-dlp", "sidecar": true, "args": true },
-        { "name": "binaries/ffmpeg", "sidecar": true, "args": true }
-      ]
-    }
+    "process:allow-restart",
+    "updater:default"
   ]
 }

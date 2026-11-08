@@ -48,6 +48,14 @@ export const googleOAuthLogin = (clientId: string) =>
 export const testSite = (site: string, proxy: string | null) =>
   invoke<SiteTestResult>("test_site", { site, proxy });
 
+export interface ComponentUpdateResult {
+  updated: boolean;
+  version: string;
+}
+
+export const updateYtdlpComponent = (channel: "stable" | "beta", deviceId: string) =>
+  invoke<ComponentUpdateResult>("update_ytdlp_component", { channel, deviceId });
+
 // ---- events ----
 
 export const onJobStatus = (handler: (e: StatusEvent) => void) =>

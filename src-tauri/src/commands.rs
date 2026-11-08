@@ -49,11 +49,11 @@ pub struct ProxyCandidate {
 /// 本机常见代理监听端口（TCP 连通即视为候选，存在误报可能，故仅作填充建议）。
 /// 顺序 = 优先级：Clash 系 mixed 端口在前，纯 SOCKS 端口在后。
 const PROXY_CANDIDATES: &[(&str, u16, &str)] = &[
-    ("127.0.0.1", 7890, "http"),   // Clash / Clash for Windows
-    ("127.0.0.1", 7897, "http"),   // Clash Verge mixed
-    ("127.0.0.1", 10808, "http"),  // v2rayN / xray http
-    ("127.0.0.1", 10809, "http"),  // v2rayN / xray mixed
-    ("127.0.0.1", 8118, "http"),   // privoxy
+    ("127.0.0.1", 7890, "http"),  // Clash / Clash for Windows
+    ("127.0.0.1", 7897, "http"),  // Clash Verge mixed
+    ("127.0.0.1", 10808, "http"), // v2rayN / xray http
+    ("127.0.0.1", 10809, "http"), // v2rayN / xray mixed
+    ("127.0.0.1", 8118, "http"),  // privoxy
     ("127.0.0.1", 8888, "http"),
     ("127.0.0.1", 3128, "http"),   // squid
     ("127.0.0.1", 7891, "socks5"), // Clash socks
@@ -101,7 +101,9 @@ pub async fn google_oauth_login(
 ) -> Result<GoogleAuthorizationCode, AppError> {
     let client_id = client_id.trim();
     if client_id.is_empty() || !client_id.ends_with(".apps.googleusercontent.com") {
-        return Err(AppError::GoogleAuth("Google OAuth 客户端 ID 未配置或格式无效".into()));
+        return Err(AppError::GoogleAuth(
+            "Google OAuth 客户端 ID 未配置或格式无效".into(),
+        ));
     }
 
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await?;
@@ -122,7 +124,8 @@ pub async fn google_oauth_login(
 
     let mut authorize_url = url::Url::parse("https://accounts.google.com/o/oauth2/v2/auth")
         .map_err(|error| AppError::GoogleAuth(error.to_string()))?;
-    authorize_url.query_pairs_mut()
+    authorize_url
+        .query_pairs_mut()
         .append_pair("client_id", client_id)
         .append_pair("redirect_uri", &redirect_uri)
         .append_pair("response_type", "code")
@@ -137,12 +140,10 @@ pub async fn google_oauth_login(
         .open_url(authorize_url.as_str(), None::<&str>)
         .map_err(|error| AppError::GoogleAuth(format!("无法打开系统浏览器：{error}")))?;
 
-    let (mut stream, _) = tokio::time::timeout(
-        std::time::Duration::from_secs(180),
-        listener.accept(),
-    )
-    .await
-    .map_err(|_| AppError::GoogleAuth("Google 登录已超时，请重试".into()))??;
+    let (mut stream, _) =
+        tokio::time::timeout(std::time::Duration::from_secs(180), listener.accept())
+            .await
+            .map_err(|_| AppError::GoogleAuth("Google 登录已超时，请重试".into()))??;
 
     let mut request_bytes = vec![0_u8; 16 * 1024];
     let read = stream.read(&mut request_bytes).await?;
@@ -158,7 +159,9 @@ pub async fn google_oauth_login(
 
     let callback_result = (|| {
         if params.get("state") != Some(&expected_state) {
-            return Err(AppError::GoogleAuth("Google 登录状态校验失败，请重试".into()));
+            return Err(AppError::GoogleAuth(
+                "Google 登录状态校验失败，请重试".into(),
+            ));
         }
         if let Some(error) = params.get("error") {
             return Err(AppError::GoogleAuth(if error == "access_denied" {
@@ -167,14 +170,22 @@ pub async fn google_oauth_login(
                 format!("Google 登录失败：{error}")
             }));
         }
-        params.get("code").cloned()
+        params
+            .get("code")
+            .cloned()
             .ok_or_else(|| AppError::GoogleAuth("Google 未返回授权码".into()))
     })();
 
     let (status, page) = if callback_result.is_ok() {
-        ("200 OK", "<!doctype html><meta charset=utf-8><title>DownloadAny</title><style>body{font:16px system-ui;text-align:center;padding:64px;color:#202124}</style><h2>登录成功</h2><p>你可以关闭此页面并返回 DownloadAny。</p>")
+        (
+            "200 OK",
+            "<!doctype html><meta charset=utf-8><title>DownloadAny</title><style>body{font:16px system-ui;text-align:center;padding:64px;color:#202124}</style><h2>登录成功</h2><p>你可以关闭此页面并返回 DownloadAny。</p>",
+        )
     } else {
-        ("400 Bad Request", "<!doctype html><meta charset=utf-8><title>DownloadAny</title><style>body{font:16px system-ui;text-align:center;padding:64px;color:#b3261e}</style><h2>登录未完成</h2><p>请关闭此页面并返回 DownloadAny 重试。</p>")
+        (
+            "400 Bad Request",
+            "<!doctype html><meta charset=utf-8><title>DownloadAny</title><style>body{font:16px system-ui;text-align:center;padding:64px;color:#b3261e}</style><h2>登录未完成</h2><p>请关闭此页面并返回 DownloadAny 重试。</p>",
+        )
     };
     let response = format!(
         "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{page}",
@@ -194,11 +205,13 @@ pub async fn google_oauth_login(
 pub async fn test_site(site: String, proxy: Option<String>) -> nettest::SiteTestResult {
     let proxy = match args::validate_proxy(proxy.as_deref()) {
         Ok(p) => p,
-        Err(e) => return nettest::SiteTestResult {
-            ok: false,
-            error: Some(e.to_string()),
-            latency_ms: 0,
-        },
+        Err(e) => {
+            return nettest::SiteTestResult {
+                ok: false,
+                error: Some(e.to_string()),
+                latency_ms: 0,
+            };
+        }
     };
     nettest::probe_site(&site, proxy.as_deref()).await
 }
@@ -271,7 +284,10 @@ pub async fn dependency_info() -> Result<DependencyInfo, AppError> {
     let yt = resolve::yt_dlp();
     let ff = resolve::ffmpeg();
     // ffmpeg 只认单横线 -version
-    let (yt_ver, ff_ver) = tokio::join!(version_of(&yt, "--version", 45), version_of(&ff, "-version", 20));
+    let (yt_ver, ff_ver) = tokio::join!(
+        version_of(&yt, "--version", 45),
+        version_of(&ff, "-version", 20)
+    );
     let info = DependencyInfo {
         yt_dlp_version: yt_ver,
         yt_dlp_source: yt.source().into(),

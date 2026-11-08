@@ -3,16 +3,16 @@
 
 use crate::args;
 use crate::error::{AppError, JobStatus};
-use crate::progress::{self, ProgressUpdate};
 use crate::probe;
+use crate::progress::{self, ProgressUpdate};
 use crate::resolve;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
-use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::{mpsc, oneshot};
 
@@ -187,7 +187,9 @@ impl AppState {
 
     /// 设置并发上限（1..=10 钳制）。调大立即放行已排队任务，调小不打断运行中任务。
     pub fn set_max_concurrency(&self, n: usize) {
-        self.inner.gate.set_limit(n.clamp(MIN_CONCURRENT, MAX_CONCURRENT_LIMIT));
+        self.inner
+            .gate
+            .set_limit(n.clamp(MIN_CONCURRENT, MAX_CONCURRENT_LIMIT));
     }
 
     pub fn cache_probe_ids(&self, url: &str, ids: HashSet<String>) {
@@ -239,7 +241,11 @@ impl AppState {
 }
 
 /// 入队：校验参数 → 建任务记录 → spawn 异步执行（内部等 permit 限并发）
-pub async fn enqueue(app: &AppHandle, state: &AppState, opts: DownloadOptions) -> Result<u64, AppError> {
+pub async fn enqueue(
+    app: &AppHandle,
+    state: &AppState,
+    opts: DownloadOptions,
+) -> Result<u64, AppError> {
     args::validate_url(&opts.url)?;
     args::validate_proxy(opts.proxy.as_deref())?;
     state.validate_format(&opts.url, &opts.format_id)?;
@@ -251,7 +257,10 @@ pub async fn enqueue(app: &AppHandle, state: &AppState, opts: DownloadOptions) -
         url: opts.url.clone(),
         title: opts.title.clone().unwrap_or_else(|| opts.url.clone()),
         format_id: opts.format_id.clone(),
-        format_label: opts.format_label.clone().unwrap_or_else(|| opts.format_id.clone()),
+        format_label: opts
+            .format_label
+            .clone()
+            .unwrap_or_else(|| opts.format_id.clone()),
         status: JobStatus::Queued,
         percent: 0.0,
         downloaded_bytes: 0,
@@ -330,9 +339,12 @@ fn kill_tree(pid: u32) {
     }
     #[cfg(windows)]
     {
-        let _ = std::process::Command::new("taskkill")
+        use std::os::windows::process::CommandExt;
+        let mut command = std::process::Command::new("taskkill");
+        command
             .args(["/T", "/F", "/PID", &pid.to_string()])
-            .spawn();
+            .creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        let _ = command.spawn();
     }
 }
 
@@ -412,7 +424,13 @@ async fn run_job(app: AppHandle, state: AppState, id: u64, opts: DownloadOptions
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
-            finish(&app, &state, id, JobStatus::Failed, Some(AppError::Spawn(e.to_string()).to_string()));
+            finish(
+                &app,
+                &state,
+                id,
+                JobStatus::Failed,
+                Some(AppError::Spawn(e.to_string()).to_string()),
+            );
             // permit 随 return 自动释放
             return;
         }
@@ -485,7 +503,9 @@ async fn run_job(app: AppHandle, state: AppState, id: u64, opts: DownloadOptions
             last_error_line.unwrap_or_else(|| {
                 format!(
                     "yt-dlp 退出码 {}",
-                    exit.and_then(|s| s.code()).map(|c| c.to_string()).unwrap_or("?".into())
+                    exit.and_then(|s| s.code())
+                        .map(|c| c.to_string())
+                        .unwrap_or("?".into())
                 )
             })
         })
@@ -506,10 +526,7 @@ fn apply_progress(app: &AppHandle, state: &AppState, id: u64, update: ProgressUp
     });
     let _ = app.emit(
         "job-progress",
-        crate::progress::ProgressEvent {
-            job_id: id,
-            update,
-        },
+        crate::progress::ProgressEvent { job_id: id, update },
     );
 }
 
@@ -567,7 +584,9 @@ mod tests {
         // 名额已满：第三个 acquire 应挂起
         let mut third = Box::pin(gate.acquire());
         assert!(
-            tokio::time::timeout(Duration::from_millis(50), third.as_mut()).await.is_err(),
+            tokio::time::timeout(Duration::from_millis(50), third.as_mut())
+                .await
+                .is_err(),
             "limit 已满时不应放行"
         );
         drop(a);
@@ -583,7 +602,11 @@ mod tests {
         let gate = Gate::new(1);
         let held = gate.acquire().await;
         let mut waiter = Box::pin(gate.acquire());
-        assert!(tokio::time::timeout(Duration::from_millis(50), waiter.as_mut()).await.is_err());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), waiter.as_mut())
+                .await
+                .is_err()
+        );
         // 调大上限：已排队任务应立刻放行（运行中的不受影响）
         gate.set_limit(2);
         let _g = tokio::time::timeout(Duration::from_secs(1), waiter)

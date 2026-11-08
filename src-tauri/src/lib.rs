@@ -1,5 +1,7 @@
 mod args;
 mod commands;
+mod component_updater;
+mod embedded_components;
 mod error;
 mod nettest;
 mod probe;
@@ -19,6 +21,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .setup(|app| {
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
+            Ok(())
+        })
         .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
             commands::probe_video,
@@ -30,7 +39,8 @@ pub fn run() {
             commands::dependency_info,
             commands::detect_proxy,
             commands::google_oauth_login,
-            commands::test_site
+            commands::test_site,
+            component_updater::update_ytdlp_component
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

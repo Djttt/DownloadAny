@@ -10,11 +10,15 @@ import {
   buildProxyUrl,
   saveLangPref,
   saveThemePref,
+  loadUpdateChannel,
+  saveUpdateChannel,
+  type UpdateChannel,
   type ProxyType,
 } from "../lib/settings";
 import { getLangPref, setLangPref, t, type LangPref } from "../lib/i18n";
 import { getThemePref, setThemePref, type ThemePref } from "../lib/theme";
 import { changePassword, logout, type AuthUser } from "../lib/auth";
+import type { AppUpdater } from "../lib/updater";
 import { EyeIcon } from "./EyeIcon";
 
 /* ========================================================================
@@ -606,6 +610,7 @@ export function SettingsModal({
   onToggleAuto,
   onSetMaxConcurrency,
   onSetProxy,
+  updater,
   onClose,
 }: {
   outputDir: string;
@@ -618,6 +623,7 @@ export function SettingsModal({
   onToggleAuto: (v: boolean) => void;
   onSetMaxConcurrency: (n: number) => void;
   onSetProxy: (type: ProxyType, addr: string) => void;
+  updater: AppUpdater;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<SettingsTab>("general");
@@ -749,7 +755,7 @@ export function SettingsModal({
           {tab === "network" && (
             <NetworkPane proxyType={proxyType} proxyAddr={proxyAddr} onSetProxy={onSetProxy} />
           )}
-          {tab === "about" && <AboutPane />}
+          {tab === "about" && <AboutPane updater={updater} />}
         </div>
       </div>
     </Modal>
@@ -947,9 +953,57 @@ function NetworkPane({
 
 /* ---- 关于页:真实版本信息 ---- */
 
-function AboutPane() {
+function updateStatus(updater: AppUpdater): string {
+  const { phase, version, progress, error } = updater.state;
+  if (phase === "checking") return t("update.checking");
+  if (phase === "available") return t("update.available", { version: version ?? "?" });
+  if (phase === "downloading") return t("update.downloading", { progress: Math.round(progress) });
+  if (phase === "ready") return t("update.ready", { version: version ?? "?" });
+  if (phase === "installing") return t("update.installing");
+  if (phase === "upToDate") return t("update.upToDate");
+  if (phase === "blocked") return t("update.blocked");
+  if (phase === "error") return error || t("update.failed");
+  return t("update.idle");
+}
+
+function UpdateActions({ updater, compact = false }: { updater: AppUpdater; compact?: boolean }) {
+  const { phase, version } = updater.state;
+  const busy = phase === "checking" || phase === "downloading" || phase === "installing";
+  return (
+    <div className={compact ? "update-actions compact" : "update-actions"}>
+      {(phase === "idle" || phase === "upToDate" || phase === "error") && (
+        <button type="button" className="chg" disabled={busy} onClick={() => void updater.checkNow()}>
+          {t("update.check")}
+        </button>
+      )}
+      {(phase === "available" || phase === "error") && version && (
+        <button type="button" className="primary" disabled={busy} onClick={() => void updater.download()}>
+          {t("update.download")}
+        </button>
+      )}
+      {(phase === "ready" || phase === "blocked") && (
+        <button type="button" className="primary" disabled={busy} onClick={() => void updater.install()}>
+          {t("update.install")}
+        </button>
+      )}
+      {version && phase !== "installing" && (
+        <button type="button" className="chg" disabled={busy} onClick={updater.later}>
+          {t("update.later")}
+        </button>
+      )}
+      {version && (phase === "available" || phase === "ready" || phase === "blocked") && (
+        <button type="button" className="clear-update" disabled={busy} onClick={() => void updater.skip()}>
+          {t("update.skip")}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function AboutPane({ updater }: { updater: AppUpdater }) {
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [dep, setDep] = useState<DependencyInfo | null>(null);
+  const [channel, setChannel] = useState<UpdateChannel>("stable");
 
   useEffect(() => {
     let alive = true;
@@ -959,6 +1013,7 @@ function AboutPane() {
     dependencyInfo()
       .then((d) => alive && setDep(d))
       .catch(() => {}); // PyInstaller 静态包首探可能较慢,失败时留空
+    loadUpdateChannel().then((value) => alive && setChannel(value)).catch(() => {});
     return () => {
       alive = false;
     };
@@ -979,7 +1034,59 @@ function AboutPane() {
         </div>
       ))}
       <p className="setting-note">{t("about.componentsNote")}</p>
+      <div className="setting-block">
+        <h4>{t("update.channel")}</h4>
+        <select
+          className="select"
+          value={channel}
+          onChange={(event) => {
+            const value = event.target.value as UpdateChannel;
+            setChannel(value);
+            void saveUpdateChannel(value);
+          }}
+        >
+          <option value="stable">{t("update.channelStable")}</option>
+          <option value="beta">{t("update.channelBeta")}</option>
+        </select>
+        <p className="setting-note">{t("update.channelNote")}</p>
+      </div>
+      <div className="about-update">
+        <div>
+          <strong>{t("update.title")}</strong>
+          <p className={updater.state.phase === "error" ? "update-status error" : "update-status"}>
+            {updateStatus(updater)}
+          </p>
+        </div>
+        {updater.state.phase === "downloading" && (
+          <div className="update-progress" aria-label={updateStatus(updater)}>
+            <span style={{ width: `${updater.state.progress}%` }} />
+          </div>
+        )}
+        <UpdateActions updater={updater} compact />
+      </div>
     </div>
+  );
+}
+
+/** 启动延迟检查发现更新后显示的非阻塞提示。 */
+export function UpdateNotice({ updater }: { updater: AppUpdater }) {
+  const { state } = updater;
+  if (!state.visible || !state.version) return null;
+  return (
+    <aside className="update-notice" aria-live="polite">
+      <div className="update-notice-head">
+        <strong>{t("update.available", { version: state.version })}</strong>
+        <button type="button" onClick={updater.later} aria-label={t("common.close")}>×</button>
+      </div>
+      {state.notes && <p className="update-notes">{state.notes}</p>}
+      <p className={state.phase === "error" ? "update-status error" : "update-status"}>
+        {updateStatus(updater)}
+      </p>
+      {state.phase === "downloading" && (
+        <div className="update-progress"><span style={{ width: `${state.progress}%` }} /></div>
+      )}
+      <UpdateActions updater={updater} />
+    </aside>
   );
 }
 

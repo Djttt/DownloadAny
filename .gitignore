@@ -25,7 +25,11 @@ dist-ssr
 
 # sidecar 二进制（由 scripts/fetch-binaries.mjs 生成）
 src-tauri/binaries/
+# 编译进主程序的压缩基础组件（同样由 fetch-binaries.mjs 生成）
+src-tauri/embedded/
 
 # Claude Code 会话数据
 .claude/
+.tauri/
+src-tauri/tauri.release.conf.json
 .env

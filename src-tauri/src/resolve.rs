@@ -1,11 +1,11 @@
-//! 二进制解析：打包态优先使用与主程序同目录的 sidecar，开发态回退到
-//! src-tauri/binaries/（fetch-binaries.mjs 产物），最后回退系统 PATH。
-//!
-//! Tauri 打包时 `bundle.externalBin` 会把 `binaries/yt-dlp-<target-triple>`
-//! 去掉后缀复制进应用目录（macOS 在 Contents/MacOS/，与主程序同级），
-//! 因此从 current_exe 的父目录查找即可，无需 tauri-plugin-shell。
+//! 二进制解析：开发态优先系统 PATH；打包态将主程序内嵌的压缩基础组件
+//! 释放到用户数据目录，再从版本化 tools/ 路径运行。安装目录不再放 sidecar。
 
 use std::path::PathBuf;
+use std::sync::OnceLock;
+
+static YT_DLP: OnceLock<Result<PathBuf, String>> = OnceLock::new();
+static FFMPEG: OnceLock<Result<PathBuf, String>> = OnceLock::new();
 
 #[derive(Clone, Debug)]
 pub enum Program {
@@ -17,19 +17,22 @@ pub enum Program {
 
 impl Program {
     pub fn command(&self) -> tokio::process::Command {
-        match self {
+        let mut command = match self {
             Program::Bundled(p) => tokio::process::Command::new(p),
             Program::FromPath(name) => tokio::process::Command::new(name),
-        }
+        };
+        // yt-dlp/FFmpeg 都是控制台子系统程序。Tauri 本身是 GUI 程序，若不
+        // 显式设置此标志，Windows 会在每次解析/下载时闪出命令提示框。
+        #[cfg(windows)]
+        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        command
     }
 
     /// 打包态下 yt-dlp 需要通过 --ffmpeg-location 显式定位 sidecar 目录，
     /// 避免命中用户系统里版本不可预期的 ffmpeg；开发态（PATH）不传。
     pub fn ffmpeg_location(&self) -> Option<String> {
         match self {
-            Program::Bundled(p) => p
-                .parent()
-                .map(|d| d.to_string_lossy().into_owned()),
+            Program::Bundled(p) => p.parent().map(|d| d.to_string_lossy().into_owned()),
             Program::FromPath(_) => None,
         }
     }
@@ -50,18 +53,14 @@ impl Program {
 }
 
 pub fn yt_dlp() -> Program {
-    resolve("yt-dlp")
+    resolve("yt-dlp", &YT_DLP)
 }
 
 pub fn ffmpeg() -> Program {
-    resolve("ffmpeg")
+    resolve("ffmpeg", &FFMPEG)
 }
 
-fn bin_file_name(name: &str) -> String {
-    format!("{}{}", name, std::env::consts::EXE_SUFFIX)
-}
-
-fn resolve(name: &str) -> Program {
+fn resolve(name: &'static str, cache: &'static OnceLock<Result<PathBuf, String>>) -> Program {
     // 开发态优先系统 PATH：官方 PyInstaller 静态包在 macOS 上每次 spawn 有
     // ~13s 的启动开销（系统评估+解包），brew/zipapp 版秒级，开发体验优先；
     // 打包态仍优先内置（开箱即用是分发的前提）。
@@ -70,25 +69,9 @@ fn resolve(name: &str) -> Program {
         return Program::FromPath(if name == "yt-dlp" { "yt-dlp" } else { "ffmpeg" });
     }
 
-    // 打包态：与主程序同目录
-    if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(|d| d.to_path_buf())) {
-        let candidate = dir.join(bin_file_name(name));
-        if candidate.is_file() {
-            return Program::Bundled(candidate);
-        }
-    }
-
-    // 开发态回退：src-tauri/binaries/<name>-<target-triple>（PATH 没装时）
-    if cfg!(debug_assertions) {
-        if let Some(triple) = target_triple() {
-            let suffix = std::env::consts::EXE_SUFFIX;
-            let candidate = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("binaries")
-                .join(format!("{}-{}{}", name, triple, suffix));
-            if candidate.is_file() {
-                return Program::Bundled(candidate);
-            }
-        }
+    // 首次调用时释放内嵌组件；同一进程中缓存结果，避免重复校验大文件。
+    if let Ok(path) = cache.get_or_init(|| crate::embedded_components::ensure(name)) {
+        return Program::Bundled(path.clone());
     }
 
     // 最后兜底 PATH（Windows 上 where 找不到也能经 CreateProcess 解析）

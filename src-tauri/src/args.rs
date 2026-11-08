@@ -25,7 +25,11 @@ fn subtitle_language(raw: &str) -> Option<&str> {
 }
 
 fn video_height(raw: &str) -> Option<u32> {
-    let height = raw.strip_prefix("__video_")?.strip_suffix("p__")?.parse().ok()?;
+    let height = raw
+        .strip_prefix("__video_")?
+        .strip_suffix("p__")?
+        .parse()
+        .ok()?;
     (144..=8640).contains(&height).then_some(height)
 }
 
@@ -121,7 +125,9 @@ pub fn validate_format(raw: &str, probed_ids: &HashSet<String>) -> Result<(), Ap
         return Err(AppError::InvalidFormat("包含非法字符".into()));
     }
     if !probed_ids.contains(raw) {
-        return Err(AppError::InvalidFormat("该格式不在本次解析结果中，请重新解析".into()));
+        return Err(AppError::InvalidFormat(
+            "该格式不在本次解析结果中，请重新解析".into(),
+        ));
     }
     Ok(())
 }
@@ -216,7 +222,9 @@ pub fn build_download_args(
             "--write-subs".into(),
             "--write-auto-subs".into(),
             "--sub-langs".into(),
-            subtitle_language(id).expect("guarded subtitle language").into(),
+            subtitle_language(id)
+                .expect("guarded subtitle language")
+                .into(),
             "--ignore-errors".into(),
             "--convert-subs".into(),
             "srt".into(),
@@ -260,9 +268,10 @@ mod tests {
         let id = "__video_1080p__";
         assert!(validate_format(id, &HashSet::new()).is_ok());
         let args = build_download_args(id, "https://x", "/tmp/o", None, None);
-        assert!(args.windows(2).any(|w| {
-            w[0] == "-f" && w[1] == "bv*[height<=1080]+ba/b[height<=1080]/b"
-        }));
+        assert!(
+            args.windows(2)
+                .any(|w| { w[0] == "-f" && w[1] == "bv*[height<=1080]+ba/b[height<=1080]/b" })
+        );
         assert!(validate_format("__video_99999p__", &HashSet::new()).is_err());
     }
 
@@ -276,7 +285,8 @@ mod tests {
 
     #[test]
     fn audio_extraction_mode() {
-        let args = build_download_args(FMT_AUDIO_MP3, "https://x", "/tmp/o", Some("/app/dir"), None);
+        let args =
+            build_download_args(FMT_AUDIO_MP3, "https://x", "/tmp/o", Some("/app/dir"), None);
         assert!(args.windows(2).any(|w| w[0] == "--ffmpeg-location"));
         assert!(args.contains(&"-x".to_string()));
     }
@@ -297,7 +307,10 @@ mod tests {
         }
         let language_index = args.iter().position(|a| a == "--sub-langs").unwrap();
         assert_eq!(args[language_index + 1], "en-orig");
-        assert!(!args.iter().any(|a| a.contains(',')), "一次只能下载一种字幕语言");
+        assert!(
+            !args.iter().any(|a| a.contains(',')),
+            "一次只能下载一种字幕语言"
+        );
         assert!(validate_format("__subtitle_zh-Hans__", &HashSet::new()).is_ok());
         assert!(validate_format(FMT_SUBTITLES, &HashSet::new()).is_ok());
         assert!(validate_format(FMT_THUMBNAIL, &HashSet::new()).is_ok());
@@ -308,7 +321,9 @@ mod tests {
         assert_eq!(validate_proxy(None).unwrap(), None);
         assert_eq!(validate_proxy(Some("   ")).unwrap(), None);
         assert_eq!(
-            validate_proxy(Some("http://127.0.0.1:7890")).unwrap().as_deref(),
+            validate_proxy(Some("http://127.0.0.1:7890"))
+                .unwrap()
+                .as_deref(),
             Some("http://127.0.0.1:7890")
         );
         assert!(validate_proxy(Some("socks5://127.0.0.1:1080")).is_ok());
@@ -323,11 +338,17 @@ mod tests {
 
     #[test]
     fn download_args_carry_proxy() {
-        let args =
-            build_download_args(FMT_BEST, "https://x", "/tmp/o", None, Some("socks5://127.0.0.1:1080"));
-        assert!(args
-            .windows(2)
-            .any(|w| w[0] == "--proxy" && w[1] == "socks5://127.0.0.1:1080"));
+        let args = build_download_args(
+            FMT_BEST,
+            "https://x",
+            "/tmp/o",
+            None,
+            Some("socks5://127.0.0.1:1080"),
+        );
+        assert!(
+            args.windows(2)
+                .any(|w| w[0] == "--proxy" && w[1] == "socks5://127.0.0.1:1080")
+        );
         let args = build_download_args(FMT_BEST, "https://x", "/tmp/o", None, None);
         assert!(!args.iter().any(|a| a == "--proxy"));
     }
