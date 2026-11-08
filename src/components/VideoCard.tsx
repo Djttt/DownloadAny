@@ -3,6 +3,7 @@ import type { FormatOption, JobRecord, VideoInfo } from "../types";
 import { fmtBytes, fmtDuration, fmtSpeed } from "../lib/format";
 import { openDownloadLocation } from "../lib/tauri";
 import { t } from "../lib/i18n";
+import { Icon, type IconName } from "./Icon";
 
 const AUDIO_FORMATS: FormatOption[] = [
   { id: "__audio_mp3__", label: "MP3" },
@@ -69,6 +70,7 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
       <div className="download-options">
         <DownloadRow
           label={t("video.label")}
+          icon="video"
           selectLabel={t("video.quality")}
           options={videoFormats}
           value={selected.video}
@@ -82,6 +84,7 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
         />
         <DownloadRow
           label={t("subtitle.label")}
+          icon="subtitle"
           selectLabel={t("subtitle.language")}
           options={subtitleLanguages}
           value={selected.subtitle}
@@ -94,6 +97,7 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
         />
         <DownloadRow
           label={t("audio.label")}
+          icon="audio"
           selectLabel={t("audio.format")}
           options={AUDIO_FORMATS}
           value={selected.audio}
@@ -106,6 +110,7 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
         />
         <DownloadRow
           label={t("cover.label")}
+          icon="cover"
           selectLabel={t("cover.format")}
           options={IMAGE_FORMATS}
           value={selected.image}
@@ -129,6 +134,7 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
 
 function DownloadRow({
   label,
+  icon,
   selectLabel,
   options,
   value,
@@ -141,6 +147,7 @@ function DownloadRow({
   showSelectedSize = false,
 }: {
   label: string;
+  icon: IconName;
   selectLabel: string;
   options: FormatOption[];
   value: string;
@@ -172,7 +179,10 @@ function DownloadRow({
 
   return (
     <div className="download-row">
-      <strong>{label}</strong>
+      <strong>
+        <Icon name={icon} size={14} style={{ marginRight: 6, color: "var(--ink-soft)" }} />
+        {label}
+      </strong>
       {active ? (
         <div className="active-download">
           <div className="inline-progress">
@@ -212,16 +222,7 @@ function DownloadRow({
                   openDownloadLocation(job.outputPath ?? "", outputDir).catch(console.error);
                 }}
               >
-                <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden>
-                  <path
-                    d="M2.75 6.25V5.4c0-1.05.85-1.9 1.9-1.9H7.3l1.65 1.85h6.4c1.05 0 1.9.85 1.9 1.9v6.35c0 1.05-.85 1.9-1.9 1.9H4.65a1.9 1.9 0 0 1-1.9-1.9V6.25Zm0 0h14.5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+                <Icon name="folder-reveal" size={18} />
               </button>
             ) : (
               <button

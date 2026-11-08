@@ -16,6 +16,7 @@ import { getLangPref, setLangPref, t, type LangPref } from "../lib/i18n";
 import { getThemePref, setThemePref, type ThemePref } from "../lib/theme";
 import { changePassword, logout, type AuthUser } from "../lib/auth";
 import { EyeIcon } from "./EyeIcon";
+import { Icon } from "./Icon";
 
 /* ========================================================================
  * 侧栏功能菜单:联系客服(悬停飞窗)/ 问题反馈(弹窗)/ 设置(弹窗)
@@ -37,17 +38,8 @@ const I = {
       <rect x="16.8" y="14.5" width="4.2" height="6" rx="1.6" />
     </svg>
   ),
-  feedback: (
-    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-      <path d="M8.5 9.5h7M8.5 12.5h4" />
-    </svg>
-  ),
-  gear: (
-    <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden>
-      <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.34-1.05-.63-1.62-.83l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.57.2-1.13.49-1.62.83l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.34 1.05.63 1.62.83l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.57-.2 1.13-.49 1.62-.83l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
-    </svg>
-  ),
+  feedback: <Icon name="feedback" size={17} />,
+  gear: <Icon name="settings" size={17} />,
   telegram: (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M22 2 11 13" />
@@ -680,7 +672,10 @@ export function SettingsModal({
                 </select>
               </div>
               <div className="setting-block">
-                <h4>{t("set.themeLabel")}</h4>
+                <h4>
+                  <Icon name="theme" size={13} style={{ marginRight: 5, color: "var(--ink-soft)" }} />
+                  {t("set.themeLabel")}
+                </h4>
                 <select
                   className="select"
                   value={themePref}
@@ -705,7 +700,10 @@ export function SettingsModal({
               </div>
               <div className="setting-block toggle-row">
                 <span className="toggle-copy">
-                  <h4>{t("set.autoLabel")}</h4>
+                  <h4>
+                    <Icon name="auto-download" size={13} style={{ marginRight: 5, color: "var(--ink-soft)" }} />
+                    {t("set.autoLabel")}
+                  </h4>
                   <small>{t("set.autoDesc")}</small>
                 </span>
                 <label className={autoDisabled ? "auto disabled" : "auto"}>
@@ -775,40 +773,12 @@ const NET_TEST_SITES: { id: string; label: string }[] = [
 type SiteState = "idle" | "busy" | "ok" | "fail";
 
 function SiteStatusIcon({ state }: { state: SiteState }) {
-  if (state === "ok") {
-    return (
-      <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden>
-        <circle cx="7" cy="7" r="7" fill="var(--green)" />
-        <path
-          d="m4.1 7.2 2 2 3.8-4.4"
-          stroke="#fff"
-          strokeWidth="1.6"
-          fill="none"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    );
-  }
-  if (state === "fail") {
-    return (
-      <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden>
-        <circle cx="7" cy="7" r="7" fill="var(--red)" />
-        <path
-          d="M4.9 4.9l4.2 4.2M9.1 4.9l-4.2 4.2"
-          stroke="#fff"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-        />
-      </svg>
-    );
-  }
+  if (state === "ok")
+    return <Icon name="success" size={14} style={{ color: "var(--green)" }} />;
+  if (state === "fail")
+    return <Icon name="error" size={14} style={{ color: "var(--red)" }} />;
   if (state === "busy") return <span className="chip-spin" aria-hidden />;
-  return (
-    <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden>
-      <circle cx="7" cy="7" r="5.6" fill="none" stroke="currentColor" strokeWidth="1.6" opacity=".25" />
-    </svg>
-  );
+  return <Icon name="waiting" size={14} style={{ opacity: 0.55 }} />;
 }
 
 function NetworkPane({

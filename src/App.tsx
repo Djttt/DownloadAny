@@ -35,6 +35,7 @@ import { setLangPref, t, useLang } from "./lib/i18n";
 import { setThemePref } from "./lib/theme";
 import { trackAnalyticsEvent } from "./lib/analytics";
 import { restoreUser, type AuthUser } from "./lib/auth";
+import { Icon } from "./components/Icon";
 import { UrlBar } from "./components/UrlBar";
 import { AuthModal } from "./components/AuthModal";
 import { FormatBar } from "./components/VideoCard";
@@ -426,15 +427,7 @@ function App() {
               setView("download");
             }}
           >
-            <svg viewBox="0 0 16 16" width="15" height="15" fill="none">
-              <path
-                d="M8 2.5v7m0 0L5.2 6.7M8 9.5l2.8-2.8M3 12.5h10"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <Icon name="download" size={15} />
             <span>{t("nav.download")}</span>
             {running > 0 && <span className="count">{running}</span>}
           </button>
@@ -445,10 +438,7 @@ function App() {
               setView("history");
             }}
           >
-            <svg viewBox="0 0 16 16" width="15" height="15" fill="none">
-              <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.5" />
-              <path d="M8 5v3.2l2.2 1.6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
+            <Icon name="history" size={15} />
             <span>{t("nav.history")}</span>
           </button>
         </nav>

@@ -5,6 +5,7 @@ import {
   type MouseEvent,
 } from "react";
 import { t } from "../lib/i18n";
+import { Icon } from "./Icon";
 
 interface Props {
   value: string;
@@ -140,16 +141,7 @@ export function UrlBar({
             t("url.processing")
           ) : (
             <>
-              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
-                <path
-                  d="M8 2.5v7m0 0L5.2 6.7M8 9.5l2.8-2.8M3 12.5h10"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  fill="none"
-                />
-              </svg>
+              <Icon name={autoMode ? "download-go" : "probe"} size={14} />
               {autoMode
                 ? urls.length > 1
                   ? t("url.downloadN", { n: urls.length })
@@ -167,9 +159,7 @@ export function UrlBar({
             disabled={cancelling}
             onClick={onCancelDownload}
           >
-            <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden>
-              <rect x="4" y="4" width="8" height="8" rx="1.2" fill="currentColor" />
-            </svg>
+            <Icon name="stop" size={13} />
             {cancelling ? t("url.stopping") : t("url.stop")}
           </button>
         )}
