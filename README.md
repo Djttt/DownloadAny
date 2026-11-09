@@ -69,6 +69,22 @@ pnpm exec tsc --noEmit            # 前端类型检查
 
 无外网时可用本地视频联调：用 ffmpeg 生成 `test.mp4`，`python3 -m http.server` 暴露后粘贴 `http://127.0.0.1:<port>/test.mp4` 即可走通探测 → 下载 → 进度全链路。
 
+### 连调远端后端（默认本机 → 服务器 SSH 隧道）
+
+后端部署在服务器上时只监听它自己的 `127.0.0.1:8000`，公网不开端口。本机开一个常驻隧道，
+把远端后端映到本地回环：
+
+```bash
+ssh -N -o ExitOnForwardFailure=yes -L 8000:127.0.0.1:8000 root@你的服务器
+pnpm tauri dev
+```
+
+`.env` 保持 `VITE_API_BASE_URL=http://127.0.0.1:8000` 即可：CSP 的 `connect-src` 与后端 CORS
+都已放行该地址，两侧都不用改。部署步骤见后端仓库 README「服务器部署」一节。
+
+只有改成公网直连（`VITE_API_BASE_URL=http://服务器地址:8000`）时，才必须同步把该地址加进
+`src-tauri/tauri.conf.json` 的 `connect-src`，否则 webview 会直接拦掉请求。
+
 ## 使用方法
 
 1. **粘贴链接，点「解析」**——支持 yt-dlp 覆盖的站点（YouTube、Bilibili、Twitter/X 等）；解析期间和结果区都会展示原始提取日志
