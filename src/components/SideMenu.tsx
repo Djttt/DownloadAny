@@ -279,15 +279,15 @@ export function AccountMenuItem({
             onMouseLeave={scheduleClose}
           >
             <div className="acc-head">
+              <p className="acc-kicker">{t("account.personal")}</p>
               <div className="acc-name-row">
                 <strong>{displayName}</strong>
                 <span className="acc-badge">{t("account.plan")}</span>
               </div>
               <small className="acc-email">{user.email}</small>
+              {/* 验证码登录的账户默认没有密码，这里给出设置入口说明 */}
+              {!user.hasPassword && <small className="acc-note">{t("account.noPasswordNote")}</small>}
             </div>
-            <button className="acc-row" type="button" title={t("account.todo")}>
-              {t("account.personal")}
-            </button>
             <button
               className="acc-row"
               type="button"

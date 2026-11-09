@@ -145,30 +145,8 @@ export async function loginWithPassword(email: string, password: string, captcha
   }
 }
 
-export async function register(email: string, password: string): Promise<string> {
-  const result = await request<{ message: string }>("/api/auth/register", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
-  return result.message;
-}
-
-export async function resendVerification(email: string): Promise<string> {
-  const result = await request<{ message: string }>("/api/auth/verification/resend", {
-    method: "POST",
-    body: JSON.stringify({ email }),
-  });
-  return result.message;
-}
-
-// 验证成功后端当场签发登录令牌：验证即登录。
-export async function verifyEmailCode(email: string, code: string): Promise<AuthUser> {
-  const tokens = await request<TokenResponse>("/api/auth/verification/code", {
-    method: "POST",
-    body: JSON.stringify({ email, code }),
-  });
-  return acceptTokens(tokens);
-}
+// 注册入口已下线：/login/code/send 会对未注册邮箱自动建号（password_hash 为空），
+// 验证码校验通过即登录；密码由用户在「用户中心 → 设置密码」通过 /change-password 补设。
 
 export async function forgotPassword(email: string): Promise<string> {
   const result = await request<{ message: string }>("/api/auth/forgot-password", {

@@ -7,17 +7,18 @@ import {
   loginWithCode,
   loginWithGoogle,
   loginWithPassword,
-  register,
   resetPasswordByEmailCode,
   sendLoginCode as requestLoginCode,
-  verifyEmailCode,
   type AuthUser,
 } from "../lib/auth";
 import { t } from "../lib/i18n";
 import { googleOAuthLogin } from "../lib/tauri";
 import { EyeIcon } from "./EyeIcon";
+import { Icon } from "./Icon";
 
-type AuthView = "code" | "register" | "password" | "forgot";
+// 产品流程：邮箱验证码即可登录（未注册邮箱自动建号，无需密码），
+// 注册入口已下线，密码改由用户中心「设置密码」补设，这里只保留 验证码 / 密码 / 找回密码。
+type AuthView = "code" | "password" | "forgot";
 type MessageType = "success" | "error";
 
 export function AuthModal({
@@ -161,13 +162,6 @@ export function AuthModal({
     return true;
   }
 
-  async function sendRegisterCode() {
-    const normalized = trimmedEmail();
-    if (!normalized) return;
-    if (!validateNewPassword()) return;
-    await runMessage(() => register(normalized, password), true);
-  }
-
   async function sendForgotCode() {
     const normalized = trimmedEmail();
     if (!normalized) return;
@@ -195,9 +189,6 @@ export function AuthModal({
     if (view === "code") {
       return run(() => loginWithCode(normalizedEmail, code));
     }
-    if (view === "register") {
-      return run(() => verifyEmailCode(normalizedEmail, code));
-    }
     if (!validateNewPassword()) return;
     setBusy(true);
     try {
@@ -216,11 +207,18 @@ export function AuthModal({
     const clientId = GOOGLE_CLIENT_ID;
     return run(async () => loginWithGoogle(await googleOAuthLogin(clientId)));
   }
+
+  const submitLabel =
+    view === "code" ? t("auth.codeLoginButton") : view === "forgot" ? t("auth.resetButton") : t("auth.login");
+
   return createPortal(
     <div className="modal-mask" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <div className="modal auth-modal" role="dialog" aria-modal="true" aria-label={t("auth.title")}>
         <header className="modal-head">
-          <div>
+          <span className="auth-badge" aria-hidden>
+            <Icon name="app-arrow" size={20} />
+          </span>
+          <div className="auth-headings">
             <h3>{t("auth.title")}</h3>
             <p className="auth-subtitle">{t("auth.subtitle")}</p>
           </div>
@@ -235,9 +233,6 @@ export function AuthModal({
             <button className={view === "code" ? "on" : ""} type="button" role="tab" aria-selected={view === "code"} onClick={() => switchView("code")}>
               {t("auth.codeLogin")}
             </button>
-            <button className={view === "register" ? "on" : ""} type="button" role="tab" aria-selected={view === "register"} onClick={() => switchView("register")}>
-              {t("auth.registerTitle")}
-            </button>
             <button className={view === "password" ? "on" : ""} type="button" role="tab" aria-selected={view === "password"} onClick={() => switchView("password")}>
               {t("auth.passwordLogin")}
             </button>
@@ -247,15 +242,21 @@ export function AuthModal({
             <input type="email" value={email} disabled={busy} autoComplete="email" placeholder="name@example.com" onChange={(event) => setEmail(event.target.value)} />
           </label>
           {view === "code" && (
-            <label className="auth-field">
-              <span>{t("auth.code")}</span>
-              <span className="auth-code-row">
-                <input className="auth-code" inputMode="numeric" maxLength={6} value={code} disabled={busy} autoComplete="one-time-code" placeholder="000000" onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} />
-                <button type="button" disabled={busy || codeCooldown > 0} onClick={sendEmailLoginCode}>
-                  {codeCooldown > 0 ? t("auth.sendCodeCountdown").replace("{seconds}", String(codeCooldown)) : t("auth.sendCode")}
-                </button>
-              </span>
-            </label>
+            <>
+              <label className="auth-field">
+                <span>{t("auth.code")}</span>
+                <span className="auth-code-row">
+                  <input className="auth-code" inputMode="numeric" maxLength={6} value={code} disabled={busy} autoComplete="one-time-code" placeholder="000000" onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} />
+                  <button type="button" disabled={busy || codeCooldown > 0} onClick={sendEmailLoginCode}>
+                    {codeCooldown > 0 ? t("auth.sendCodeCountdown").replace("{seconds}", String(codeCooldown)) : t("auth.sendCode")}
+                  </button>
+                </span>
+              </label>
+              <p className="auth-hint">
+                <Icon name="info" size={15} />
+                <span>{t("auth.codeHint")}</span>
+              </p>
+            </>
           )}
           {view === "password" && (
             <>
@@ -274,13 +275,17 @@ export function AuthModal({
                   <input inputMode="numeric" maxLength={4} value={captcha.answer} disabled={busy} placeholder={t("auth.captchaAnswerPlaceholder")} onChange={(event) => setCaptcha({ ...captcha, answer: event.target.value })} />
                 </label>
               )}
+              <p className="auth-hint">
+                <Icon name="info" size={15} />
+                <span>{t("auth.passwordHintCode")}</span>
+              </p>
             </>
           )}
-          {(view === "register" || view === "forgot") && (
+          {view === "forgot" && (
             <>
               {passwordRow(
-                view === "forgot" ? t("auth.newPassword") : t("auth.password"),
-                view === "forgot" ? t("auth.newPasswordPlaceholder") : t("auth.passwordPlaceholder"),
+                t("auth.newPassword"),
+                t("auth.newPasswordPlaceholder"),
                 "new-password",
                 password,
                 reveal,
@@ -300,17 +305,15 @@ export function AuthModal({
                 <span>{t("auth.code")}</span>
                 <span className="auth-code-row">
                   <input className="auth-code" inputMode="numeric" maxLength={6} value={code} disabled={busy} autoComplete="one-time-code" placeholder="000000" onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} />
-                  <button type="button" disabled={busy || codeCooldown > 0} onClick={view === "forgot" ? sendForgotCode : sendRegisterCode}>
-                    {codeCooldown > 0
-                      ? t("auth.sendCodeCountdown").replace("{seconds}", String(codeCooldown))
-                      : view === "forgot" ? t("auth.sendCode") : t("auth.register")}
+                  <button type="button" disabled={busy || codeCooldown > 0} onClick={sendForgotCode}>
+                    {codeCooldown > 0 ? t("auth.sendCodeCountdown").replace("{seconds}", String(codeCooldown)) : t("auth.sendCode")}
                   </button>
                 </span>
               </label>
             </>
           )}
           <button className="primary auth-submit" type="submit" disabled={busy}>
-            {busy ? t("auth.working") : view === "code" ? t("auth.codeLoginButton") : view === "register" ? t("auth.verifyAndLogin") : view === "forgot" ? t("auth.resetButton") : t("auth.login")}
+            {busy ? t("auth.working") : submitLabel}
           </button>
           {view === "password" && (
             <button className="auth-link" type="button" disabled={busy} onClick={() => switchView("forgot")}>{t("auth.forgotPassword")}</button>
