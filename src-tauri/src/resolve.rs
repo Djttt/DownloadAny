@@ -17,6 +17,8 @@ pub enum Program {
 
 impl Program {
     pub fn command(&self) -> tokio::process::Command {
+        // mut 仅在 Windows 分支被使用（creation_flags），其他平台会误报 unused_mut
+        #[cfg_attr(not(windows), allow(unused_mut))]
         let mut command = match self {
             Program::Bundled(p) => tokio::process::Command::new(p),
             Program::FromPath(name) => tokio::process::Command::new(name),
