@@ -10,6 +10,7 @@ import {
   onLogLine,
   probeVideo,
   setMaxConcurrency,
+  updateYtdlpComponent,
   type UnlistenFn,
 } from "./lib/tauri";
 import {
@@ -24,6 +25,7 @@ import {
   loadProxyAddr,
   loadProxyType,
   loadThemePref,
+  loadUpdateChannel,
   saveAutoMode,
   saveMaxConcurrency,
   saveOutputDir,
@@ -33,8 +35,9 @@ import {
 } from "./lib/settings";
 import { setLangPref, t, useLang } from "./lib/i18n";
 import { setThemePref } from "./lib/theme";
-import { trackAnalyticsEvent } from "./lib/analytics";
+import { analyticsContext, trackAnalyticsEvent } from "./lib/analytics";
 import { restoreUser, type AuthUser } from "./lib/auth";
+import { useAppUpdater } from "./lib/updater";
 import { Icon } from "./components/Icon";
 import { UrlBar } from "./components/UrlBar";
 import { AuthModal } from "./components/AuthModal";
@@ -46,6 +49,7 @@ import {
   FeedbackModal,
   SettingsModal,
   SupportMenuItem,
+  UpdateNotice,
   menuIcons,
 } from "./components/SideMenu";
 import "./App.css";
@@ -85,6 +89,9 @@ function App() {
   const pendingParse = useRef<string[] | null>(null);
   const [message, setMessage] = useState<AppMessage | null>(null);
   const messageTimer = useRef(0);
+  const updater = useAppUpdater(
+    Object.values(jobs).some((job) => job.status === "queued" || job.status === "running"),
+  );
 
   function showMessage(text: string, type: AppMessage["type"]) {
     window.clearTimeout(messageTimer.current);
@@ -105,6 +112,15 @@ function App() {
   }, []);
 
   useEffect(() => () => window.clearTimeout(messageTimer.current), []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void Promise.all([analyticsContext(), loadUpdateChannel()])
+        .then(([context, channel]) => updateYtdlpComponent(channel, context.deviceId))
+        .catch(() => {}); // 组件更新是尽力而为，失败不影响解析和下载。
+    }, 15_000);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -406,6 +422,7 @@ function App() {
           <button type="button" aria-label={t("common.close")} onClick={() => setMessage(null)}>×</button>
         </div>
       )}
+      <UpdateNotice updater={updater} />
       <aside className="side">
         <div className="brand">
           <span className="gem" aria-hidden>
@@ -539,6 +556,7 @@ function App() {
           onToggleAuto={toggleAuto}
           onSetMaxConcurrency={applyMaxConcurrency}
           onSetProxy={applyProxy}
+          updater={updater}
           onClose={() => setDialog(null)}
         />
       )}

@@ -2660,6 +2660,131 @@ select:focus-visible {
   margin-top: 4px;
 }
 
+/* ================= 应用自动更新 ================= */
+
+.about-update {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 18px;
+  border-top: 1px solid var(--hairline);
+}
+
+.about-update strong {
+  color: var(--ink);
+  font-size: 13.5px;
+}
+
+.update-notice {
+  position: fixed;
+  z-index: 120;
+  right: 22px;
+  bottom: 22px;
+  width: min(390px, calc(100vw - 44px));
+  padding: 16px;
+  border: 1px solid var(--indigo-line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.22);
+  animation: result-card-in 0.3s ease both;
+}
+
+.update-notice-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.update-notice-head button {
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.update-notes {
+  max-height: 100px;
+  margin: 10px 0 0;
+  overflow: auto;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.update-status {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.update-status.error {
+  color: var(--red);
+  word-break: break-word;
+}
+
+.update-progress {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--hairline);
+}
+
+.update-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--indigo);
+  transition: width 0.2s ease;
+}
+
+.update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.update-actions.compact {
+  margin-top: 0;
+}
+
+.update-actions .primary,
+.update-actions .chg {
+  min-height: 32px;
+  padding: 6px 13px;
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+
+.update-actions .primary {
+  background: var(--indigo);
+  color: #fff;
+}
+
+.update-actions .chg {
+  border: 1px solid var(--hairline);
+  color: var(--ink-soft);
+}
+
+.update-actions button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.clear-update {
+  padding: 6px 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.clear-update:hover:not(:disabled) {
+  color: var(--red);
+}
+
 /* ================= TDesign 蓝白主题细节 ================= */
 
 .nav,

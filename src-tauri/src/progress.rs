@@ -35,7 +35,9 @@ pub fn parse_progress_line(prefix: &str, line: &str) -> Option<ProgressUpdate> {
         percent,
         downloaded_bytes,
         // total_bytes 对直播/未知长度视频为 None，退回 estimate
-        total_bytes: parse_num(f[2]).or_else(|| parse_num(f[3])).map(|v| v as u64),
+        total_bytes: parse_num(f[2])
+            .or_else(|| parse_num(f[3]))
+            .map(|v| v as u64),
         speed: parse_num(f[4]),
         eta: parse_num(f[5]).map(|v| v as u64),
     })

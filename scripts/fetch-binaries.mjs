@@ -9,8 +9,9 @@
 // 用法：node scripts/fetch-binaries.mjs
 // 重新下载：DOWNLOADANY_FORCE=1 node scripts/fetch-binaries.mjs
 
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { gzipSync } from "node:zlib";
 // Node 的 fetch 默认不读 *_PROXY 环境变量；挂上 EnvHttpProxyAgent 才会走系统代理
 import { EnvHttpProxyAgent, setGlobalDispatcher } from "undici";
 
@@ -32,6 +33,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const BIN_DIR = join(ROOT, "src-tauri", "binaries");
+const EMBED_DIR = join(ROOT, "src-tauri", "embedded");
 
 // 与 resolve.rs::target_triple() 一致
 const TRIPLE = {
@@ -66,6 +68,7 @@ main().catch((err) => {
 
 async function main() {
   mkdirSync(BIN_DIR, { recursive: true });
+  mkdirSync(EMBED_DIR, { recursive: true });
 
   const force = process.env.DOWNLOADANY_FORCE === "1";
   const sums = {};
@@ -107,6 +110,59 @@ async function main() {
   }
 
   writeFileSync(join(BIN_DIR, "SHA256SUMS.txt"), formatSums(sums));
+  buildEmbeddedPayload();
+}
+
+// 将基础组件压缩后嵌入 Rust 主程序。安装目录不会再出现 sidecar；应用首次
+// 使用时会把它们原子释放到用户数据目录的版本化 tools/ 路径。
+function buildEmbeddedPayload() {
+  const components = [
+    componentMetadata("yt-dlp", YTDLP_TARGET, "--version"),
+    componentMetadata("ffmpeg", FFMPEG_TARGET, "-version"),
+  ];
+
+  for (const component of components) {
+    const input = readFileSync(component.source);
+    writeIfChanged(
+      join(EMBED_DIR, `${component.id}.gz`),
+      gzipSync(input, { level: 9 }),
+    );
+    delete component.source;
+  }
+
+  writeIfChanged(
+    join(EMBED_DIR, "manifest.json"),
+    Buffer.from(
+      JSON.stringify({ schemaVersion: 1, target: TRIPLE, components }, null, 2) + "\n",
+    ),
+  );
+  console.log(`[fetch-binaries] 已生成内嵌基础组件: ${EMBED_DIR}`);
+}
+
+function writeIfChanged(path, content) {
+  if (existsSync(path) && readFileSync(path).equals(content)) return;
+  writeFileSync(path, content);
+}
+
+function componentMetadata(id, source, versionFlag) {
+  const output = execFileSync(source, [versionFlag], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const firstLine = output.split(/\r?\n/, 1)[0].trim();
+  const version = id === "ffmpeg"
+    ? firstLine.match(/^ffmpeg version\s+([^\s]+)/i)?.[1]
+    : firstLine;
+  if (!version || !/^[A-Za-z0-9._+-]+$/.test(version)) {
+    throw new Error(`${id}: 无法识别组件版本: ${firstLine}`);
+  }
+  return {
+    id,
+    version,
+    fileName: `${id}${EXE}`,
+    sha256: sha256File(source),
+    source,
+  };
 }
 
 // ---------- yt-dlp：GitHub Releases latest + 官方校验和 ----------

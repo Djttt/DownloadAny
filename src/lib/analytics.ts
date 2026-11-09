@@ -34,7 +34,7 @@ interface AnalyticsContext {
 
 let contextPromise: Promise<AnalyticsContext> | null = null;
 
-function analyticsContext(): Promise<AnalyticsContext> {
+export function analyticsContext(): Promise<AnalyticsContext> {
   if (contextPromise) return contextPromise;
   contextPromise = (async () => {
     const settings = await load("settings.json", { autoSave: true });

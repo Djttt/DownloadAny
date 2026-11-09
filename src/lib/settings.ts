@@ -89,6 +89,30 @@ export async function saveProxyAddr(a: string): Promise<void> {
   (await store()).set("proxyAddr", a);
 }
 
+/** 用户选择“跳过此版本”时持久化；手动检查仍会展示该版本。 */
+export async function loadSkippedUpdateVersion(): Promise<string | null> {
+  const value = await (await store()).get<string>("skippedUpdateVersion");
+  return typeof value === "string" && value ? value : null;
+}
+
+export async function saveSkippedUpdateVersion(version: string | null): Promise<void> {
+  const s = await store();
+  if (version) await s.set("skippedUpdateVersion", version);
+  else await s.delete("skippedUpdateVersion");
+}
+
+export type UpdateChannel = "stable" | "beta";
+
+export async function loadUpdateChannel(): Promise<UpdateChannel> {
+  const value = await (await store()).get<string>("updateChannel");
+  return value === "beta" ? "beta" : "stable";
+}
+
+export async function saveUpdateChannel(channel: UpdateChannel): Promise<void> {
+  await (await store()).set("updateChannel", channel);
+  await saveSkippedUpdateVersion(null);
+}
+
 /** 地址已是完整 URL 则原样使用，否则按类型补 scheme；类型 none 或地址为空 → 不走代理 */
 export function buildProxyUrl(type: ProxyType, addr: string): string | null {
   if (type === "none") return null;
