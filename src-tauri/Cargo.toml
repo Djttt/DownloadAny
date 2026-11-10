@@ -1,6 +1,6 @@
 [package]
 name = "downloadany"
-version = "0.1.0"
+version = "0.1.1"
 description = "A yt-dlp powered desktop downloader"
 authors = ["dengjun"]
 edition = "2024"
