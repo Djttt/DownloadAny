@@ -10,9 +10,6 @@ import {
   buildProxyUrl,
   saveLangPref,
   saveThemePref,
-  loadUpdateChannel,
-  saveUpdateChannel,
-  type UpdateChannel,
   type ProxyType,
 } from "../lib/settings";
 import { getLangPref, setLangPref, t, type LangPref } from "../lib/i18n";
@@ -973,7 +970,6 @@ function UpdateActions({ updater, compact = false }: { updater: AppUpdater; comp
 function AboutPane({ updater }: { updater: AppUpdater }) {
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [dep, setDep] = useState<DependencyInfo | null>(null);
-  const [channel, setChannel] = useState<UpdateChannel>("stable");
 
   useEffect(() => {
     let alive = true;
@@ -983,7 +979,6 @@ function AboutPane({ updater }: { updater: AppUpdater }) {
     dependencyInfo()
       .then((d) => alive && setDep(d))
       .catch(() => {}); // PyInstaller 静态包首探可能较慢,失败时留空
-    loadUpdateChannel().then((value) => alive && setChannel(value)).catch(() => {});
     return () => {
       alive = false;
     };
@@ -1010,22 +1005,6 @@ function AboutPane({ updater }: { updater: AppUpdater }) {
         </div>
       ))}
       <p className="setting-note">{t("about.componentsNote")}</p>
-      <div className="setting-block">
-        <h4>{t("update.channel")}</h4>
-        <select
-          className="select"
-          value={channel}
-          onChange={(event) => {
-            const value = event.target.value as UpdateChannel;
-            setChannel(value);
-            void saveUpdateChannel(value);
-          }}
-        >
-          <option value="stable">{t("update.channelStable")}</option>
-          <option value="beta">{t("update.channelBeta")}</option>
-        </select>
-        <p className="setting-note">{t("update.channelNote")}</p>
-      </div>
       <div className="about-update">
         <div>
           <strong>{t("update.title")}</strong>
