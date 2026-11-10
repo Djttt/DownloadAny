@@ -37,7 +37,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUxODRBMUQ3NDU1QkQ1RDQKUldUVTFWdEYxNkdFVWNPczRqMCs1M0dXdHZTTFBrbjFpcUNoWFJuZHkrRW93aUVaL2ZxYzBvYkIK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEMxMjMxNUY1NjI3QUQ0RUUKUldUdTFIcGk5UlVqd1lxMkxDSkNsVk9uc1kweDZBUVJWTXZwaUwrTzA5V3p3bHBpZFNqVUJQVWQK",
       "endpoints": [
         "https://github.com/Djttt/DownloadAny/releases/latest/download/latest.json"
       ],

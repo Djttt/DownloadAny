@@ -3,7 +3,7 @@ use minisign_verify::{PublicKey, Signature};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-const UPDATE_PUBLIC_KEY: &str = "untrusted comment: minisign public key: 5184A1D7455BD5D4\nRWTU1VtF16GEUcOs4j0+53GWtvSLPkn1iqChXRndy+EowiEZ/fqc0obB\n";
+const UPDATE_PUBLIC_KEY: &str = "untrusted comment: minisign public key: C12315F5627AD4EE\nRWTu1Hpi9RUjwYq2LCJClVOnsY0x6AQRVMvpiL+O09WzwlpidSjUBPUd\n";
 
 #[derive(Debug, Deserialize)]
 struct ComponentUpdate {
