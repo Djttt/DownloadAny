@@ -23,8 +23,10 @@ CDN 生产环境必须使用 HTTPS。
 
 ## 2. 发布桌面版本
 
-1. 按第一期流程打标签，取得 NSIS 更新产物及 `.sig`。
-2. 把 NSIS 更新产物上传到 CDN，例如 `desktop/0.2.0/DownloadAny-setup.exe`。
+1. 按第一期流程打标签，Actions 产出双平台更新件：Windows NSIS zip + `.sig`、
+   macOS `.app.tar.gz` + `.sig`（仅 Apple Silicon）。
+2. 把各平台更新产物分别上传到 CDN，例如 `desktop/0.2.0/DownloadAny-setup.exe`、
+   `desktop/0.2.0/DownloadAny_aarch64.app.tar.gz`。
 3. 调用管理接口登记发布（`signature` 填 `.sig` 文件的完整单行内容）：
 
 ```powershell
@@ -43,6 +45,9 @@ $body = @{
 Invoke-RestMethod -Method Post -Uri "$env:DOWNLOADANY_API_BASE_URL/api/updates/admin/desktop" `
   -Headers $headers -ContentType "application/json" -Body $body
 ```
+
+每个平台各登记一条（上例为 Windows）：macOS 将 `target` 填 `macos`、`arch` 填
+`aarch64`，`artifact_path`/`signature` 换成对应产物。
 
 `rollout_percent` 可通过 `PATCH /api/updates/admin/desktop/{id}` 从 10 逐步提高到
 100（请求体如 `{"rollout_percent": 50}`）；同一设备始终落在同一灰度桶。
