@@ -55,7 +55,7 @@ Rust 侧（`src-tauri/src/`，一模块一职责）：
 - 界面为浅色侧栏布局（参考 SnapAny）：侧栏（下载/历史视图切换）+ UrlBar + 自动下载开关 + 表式任务列表（行内进度与"状态子行"）+ 底部保存目录栏。令牌定义在 `App.css` `:root`
 - `types.ts` 是前后端契约，**必须镜像 Rust serde 结构（全部 `#[serde(rename_all = "camelCase")]`）**；改 Rust 结构必须同步改这里（如 `JobRecord.formatId` 支撑失败重试）
 - `App.tsx` 以 jobId 归并三个事件到 `jobs`/`logs` map；骨架记录可能先于 invoke resolve 到达，upsert 时勿覆盖未知字段。队列是纯内存的，重启即空（页面 HMR 重载后 Rust 状态还在，靠 `list_jobs` hydration 找回）
-- `lib/updater.ts` — 整包自更新 hook `useAppUpdater(hasActiveJobs)`（tauri-plugin-updater 纯前端编排，Rust 零逻辑）：启动 10s 自动静默 check（失败不打扰），手动 checkNow 才显示 upToDate/error；请求头带 `X-DownloadAny-Device-Id/Channel`（服务端灰度分桶）；有 queued/running 任务时 install 进 `blocked`；skip 记版本进 store 后自动检查不再提示。组件热更新由 `App.tsx` 启动 15s 后触发，尽力而为、失败吞掉
+- `lib/updater.ts` — 整包自更新 hook `useAppUpdater(hasActiveJobs)`（tauri-plugin-updater 纯前端编排，Rust 零逻辑）：启动 5s 自动静默 check（失败不打扰），发现新版本弹右下角浮动提示 `UpdateNotice`；手动 checkNow 不弹浮层，结果只在设置-关于页内展示（浮层可见时关于页更新块让位，保证同一时刻只有一处更新提示；收起浮层后回落为关于页入口）；请求头带 `X-DownloadAny-Device-Id/Channel`（服务端灰度分桶）；有 queued/running 任务时 install 进 `blocked`；skip 记版本进 store 后自动检查不再提示。组件热更新由 `App.tsx` 启动 15s 后触发，尽力而为、失败吞掉
 - 设置（下载目录、自动下载、updateChannel/skippedUpdateVersion）用 `@tauri-apps/plugin-store`；目录选择用 `@tauri-apps/plugin-dialog`；已完成任务的"在文件夹中显示"用 `@tauri-apps/plugin-opener` 的 `revealItemInDir`
 - ffmpeg 只认单横线 `-version`（yt-dlp 用 `--version`）——版本探测与脚本校验都按工具区分参数；`dependency_info` 有 OnceLock 缓存避免重复付费
 

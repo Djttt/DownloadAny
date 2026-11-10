@@ -48,7 +48,7 @@ export function useAppUpdater(hasActiveJobs: boolean): AppUpdater {
   const runCheck = useCallback(async (manual: boolean) => {
     if (busyRef.current) return;
     busyRef.current = true;
-    setState((previous) => ({ ...previous, phase: "checking", visible: manual, error: undefined }));
+    setState((previous) => ({ ...previous, phase: "checking", error: undefined }));
     try {
       const [{ deviceId }, channel] = await Promise.all([analyticsContext(), loadUpdateChannel()]);
       const update = await check({
@@ -76,7 +76,8 @@ export function useAppUpdater(hasActiveJobs: boolean): AppUpdater {
         version: update.version,
         notes: update.body,
         progress: 0,
-        visible: true,
+        // 浮动提示框只由启动自动检查弹出；手动检查的结果只在设置-关于页内展示。
+        visible: !manual,
       });
     } catch (error) {
       // 自动检查失败不打扰用户；手动检查才显示错误。
@@ -92,7 +93,7 @@ export function useAppUpdater(hasActiveJobs: boolean): AppUpdater {
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void runCheck(false), 10_000);
+    const timer = window.setTimeout(() => void runCheck(false), 5_000);
     return () => window.clearTimeout(timer);
   }, [runCheck]);
 
@@ -129,7 +130,7 @@ export function useAppUpdater(hasActiveJobs: boolean): AppUpdater {
     const update = updateRef.current;
     if (!update || busyRef.current) return;
     if (hasActiveJobs) {
-      setState((previous) => ({ ...previous, phase: "blocked", visible: true }));
+      setState((previous) => ({ ...previous, phase: "blocked" }));
       return;
     }
     busyRef.current = true;

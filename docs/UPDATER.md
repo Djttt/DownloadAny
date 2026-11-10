@@ -27,7 +27,7 @@ Tag 必须与 `tauri.conf.json` 中的版本完全一致。GitHub Actions（`.gi
 签名 updater 产物、创建 Release，并把两个平台的条目合并进同一份 `latest.json`
 （`windows-x86_64` / `darwin-aarch64`）。串行是刻意的：tauri-action 的 latest.json
 是"拉取旧文件→合并 platforms→删重传"的读-改-写，两个 job 并发会互相覆盖平台键。
-客户端启动 10 秒后检查：
+客户端启动 5 秒后自动检查（发现新版本弹右下角浮动提示；设置里的手动「检查更新」不弹浮层，只在关于页内展示结果）：
 
 `https://github.com/Djttt/DownloadAny/releases/latest/download/latest.json`
 
@@ -66,10 +66,10 @@ pnpm tauri build --bundles app,dmg
 
 1. 安装 GitHub Release 中签名发布的 `0.1.0`，不要使用未签名的本地调试包。
 2. 发布 `v0.1.1`，确认 Release 包含安装包、`.sig` 和 `latest.json`。
-3. 启动 `0.1.0`，约 10 秒后应出现更新提示。
+3. 启动 `0.1.0`，约 5 秒后右下角应出现浮动更新提示。
 4. 验证更新说明、下载进度、稍后、跳过此版本。
 5. 创建一个运行中的下载任务，验证立即安装被阻止。
 6. 任务结束后安装，应用应退出、完成 NSIS 更新并重新启动为 `0.1.1`。
 7. （macOS / Apple Silicon）首次安装 Release 中的 `.dmg`（Gatekeeper 拦时右键「打开」放行一次），
-   发布 `v0.1.1` 后启动约 10s 出提示，走 下载→安装：应用应自替换 bundle 并重启为 `0.1.1`，
+   发布 `v0.1.1` 后启动约 5s 弹浮动提示，走 下载→安装：应用应自替换 bundle 并重启为 `0.1.1`，
    且不再触发 Gatekeeper 二次确认；确认 latest.json 同时含 `windows-x86_64` 与 `darwin-aarch64`。

@@ -934,7 +934,7 @@ function updateStatus(updater: AppUpdater): string {
 }
 
 function UpdateActions({ updater, compact = false }: { updater: AppUpdater; compact?: boolean }) {
-  const { phase, version } = updater.state;
+  const { phase, version, visible } = updater.state;
   const busy = phase === "checking" || phase === "downloading" || phase === "installing";
   return (
     <div className={compact ? "update-actions compact" : "update-actions"}>
@@ -953,7 +953,8 @@ function UpdateActions({ updater, compact = false }: { updater: AppUpdater; comp
           {t("update.install")}
         </button>
       )}
-      {version && phase !== "installing" && (
+      {/* 「稍后」只在浮动提示可见时有意义（收起浮层）；内嵌卡片不提供死按钮。 */}
+      {version && visible && phase !== "installing" && (
         <button type="button" className="chg" disabled={busy} onClick={updater.later}>
           {t("update.later")}
         </button>
@@ -990,6 +991,11 @@ function AboutPane({ updater }: { updater: AppUpdater }) {
     [t("about.website"), WEBSITE_URL],
   ];
 
+  // 与 UpdateNotice 的渲染条件保持一致：启动自动检查弹出的浮层可见时，
+  // 关于页不再重复渲染更新提示，保证同一时刻只有一处更新界面；
+  // 手动检查的结果（visible=false）以及收起浮层后的回落入口都在这里。
+  const noticeShown = updater.state.visible && !!updater.state.version;
+
   return (
     <div className="about-list">
       <div className="about-brand">
@@ -1005,20 +1011,22 @@ function AboutPane({ updater }: { updater: AppUpdater }) {
         </div>
       ))}
       <p className="setting-note">{t("about.componentsNote")}</p>
-      <div className="about-update">
-        <div>
-          <strong>{t("update.title")}</strong>
-          <p className={updater.state.phase === "error" ? "update-status error" : "update-status"}>
-            {updateStatus(updater)}
-          </p>
-        </div>
-        {updater.state.phase === "downloading" && (
-          <div className="update-progress" aria-label={updateStatus(updater)}>
-            <span style={{ width: `${updater.state.progress}%` }} />
+      {!noticeShown && (
+        <div className="about-update">
+          <div>
+            <strong>{t("update.title")}</strong>
+            <p className={updater.state.phase === "error" ? "update-status error" : "update-status"}>
+              {updateStatus(updater)}
+            </p>
           </div>
-        )}
-        <UpdateActions updater={updater} compact />
-      </div>
+          {updater.state.phase === "downloading" && (
+            <div className="update-progress" aria-label={updateStatus(updater)}>
+              <span style={{ width: `${updater.state.progress}%` }} />
+            </div>
+          )}
+          <UpdateActions updater={updater} compact />
+        </div>
+      )}
     </div>
   );
 }
