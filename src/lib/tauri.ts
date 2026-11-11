@@ -4,7 +4,6 @@ import type {
   DependencyInfo,
   DownloadOptions,
   JobRecord,
-  LogLineEvent,
   ProgressEvent,
   ProxyCandidate,
   SiteTestResult,
@@ -63,6 +62,3 @@ export const onJobStatus = (handler: (e: StatusEvent) => void) =>
 
 export const onJobProgress = (handler: (e: ProgressEvent) => void) =>
   listen<ProgressEvent>("job-progress", (ev) => handler(ev.payload));
-
-export const onLogLine = (handler: (e: LogLineEvent) => void) =>
-  listen<LogLineEvent>("log-line", (ev) => handler(ev.payload));

@@ -7,7 +7,6 @@ import {
   listJobs,
   onJobProgress,
   onJobStatus,
-  onLogLine,
   probeVideo,
   setMaxConcurrency,
   updateYtdlpComponent,
@@ -36,6 +35,7 @@ import {
 import { setLangPref, t, useLang } from "./lib/i18n";
 import { setThemePref } from "./lib/theme";
 import { analyticsContext, trackAnalyticsEvent } from "./lib/analytics";
+import { loadDownloadHistory, saveDownloadHistory } from "./lib/history";
 import { restoreUser, type AuthUser } from "./lib/auth";
 import { useAppUpdater } from "./lib/updater";
 import { Icon } from "./components/Icon";
@@ -54,7 +54,6 @@ import {
 } from "./components/SideMenu";
 import "./App.css";
 
-const LOG_CAP = 500;
 const TERMINAL: JobRecord["status"][] = ["completed", "failed", "cancelled"];
 
 type View = "download" | "history";
@@ -69,7 +68,7 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobs, setJobs] = useState<Record<number, JobRecord>>({});
-  const [logs, setLogs] = useState<Record<number, string[]>>({});
+  const [historyJobs, setHistoryJobs] = useState<JobRecord[]>([]);
   const [outputDir, setOutputDir] = useState("");
   const [autoMode, setAutoMode] = useState(false);
   const [maxConcurrency, setMaxConcurrencyState] = useState(CONCURRENCY_DEFAULT);
@@ -82,6 +81,7 @@ function App() {
   const autoCancelRequested = useRef(false);
   const analyticsJobs = useRef<Record<number, Pick<JobRecord, "url" | "title" | "formatId" | "formatLabel">>>({});
   const trackedTerminalEvents = useRef(new Set<string>());
+  const historyIds = useRef<Record<number, string>>({});
   const [view, setView] = useState<View>("download");
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -130,7 +130,7 @@ function App() {
           setJobs(Object.fromEntries(existing.map((j) => [j.id, j])));
           analyticsJobs.current = Object.fromEntries(existing.map((job) => [job.id, job]));
         }
-        const [dir, auto, conc, lang, pType, pAddr, theme] = await Promise.all([
+        const [dir, auto, conc, lang, pType, pAddr, theme, history] = await Promise.all([
           loadOutputDir(),
           loadAutoMode(),
           loadMaxConcurrency(),
@@ -138,6 +138,7 @@ function App() {
           loadProxyType(),
           loadProxyAddr(),
           loadThemePref(),
+          loadDownloadHistory(),
         ]);
         setOutputDir(dir);
         setAutoMode(auto);
@@ -146,6 +147,7 @@ function App() {
         setMaxConcurrencyState(conc);
         setProxyTypeState(pType);
         setProxyAddrState(pAddr);
+        setHistoryJobs(history);
         await setMaxConcurrency(conc); // 把持久化的偏好推给 Rust 队列
         void trackAnalyticsEvent("app_open");
       } catch (e) {
@@ -193,16 +195,6 @@ function App() {
         });
       }
     }));
-    reg(
-      onLogLine((l) =>
-        setLogs((prev) => {
-          const arr = prev[l.jobId] ?? [];
-          const next =
-            arr.length >= LOG_CAP ? [...arr.slice(arr.length - LOG_CAP + 1), l.line] : [...arr, l.line];
-          return { ...prev, [l.jobId]: next };
-        }),
-      ),
-    );
     return () => {
       disposed = true;
       unlisten.forEach((f) => f());
@@ -222,7 +214,16 @@ function App() {
           percent: 0,
           downloadedBytes: 0,
         };
-      return { ...prev, [id]: { ...cur, ...patch } };
+      let next = { ...cur, ...patch };
+      const becameTerminal = !TERMINAL.includes(cur.status) && TERMINAL.includes(next.status);
+      if (becameTerminal) {
+        const historyId = historyIds.current[id] ?? crypto.randomUUID();
+        const savedAt = Date.now();
+        historyIds.current[id] = historyId;
+        next = { ...next, savedAt };
+        void saveDownloadHistory({ ...next, historyId }).catch(console.error);
+      }
+      return { ...prev, [id]: next };
     });
   }
 
@@ -333,12 +334,6 @@ function App() {
     }
   }
 
-  function handleRetry(job: JobRecord) {
-    enqueue({ id: job.formatId, label: job.formatLabel, filesize: null }, job.url, job.title).catch(
-      () => {},
-    );
-  }
-
   async function pickDir() {
     const sel = await open({ directory: true, defaultPath: outputDir, title: t("dir.pickerTitle") });
     if (typeof sel === "string") {
@@ -396,7 +391,9 @@ function App() {
     window.setTimeout(remove, 650);
   }
 
-  const all = Object.values(jobs).sort((a, b) => b.id - a.id);
+  const all = [...Object.values(jobs), ...historyJobs].sort(
+    (a, b) => (b.savedAt ?? b.id) - (a.savedAt ?? a.id),
+  );
   const visible = view === "history" ? all.filter((j) => TERMINAL.includes(j.status)) : all;
   const running = all.filter((j) => j.status === "running").length;
   const done = all.filter((j) => j.status === "completed").length;
@@ -521,7 +518,7 @@ function App() {
 
         {view === "history" && (
           <section className="list" aria-label={t("app.listAriaHistory")}>
-            <QueueList jobs={visible} logs={logs} outputDir={outputDir} onCancel={cancel} onRetry={handleRetry} />
+            <QueueList jobs={visible} outputDir={outputDir} onCancel={cancel} />
           </section>
         )}
 

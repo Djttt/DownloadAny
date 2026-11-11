@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type { JobRecord } from "../types";
 import { fmtBytes, fmtEta, fmtSpeed } from "../lib/format";
 import { openDownloadLocation } from "../lib/tauri";
@@ -15,28 +14,25 @@ const STATUS_TEXT = {
 
 interface Props {
   jobs: JobRecord[];
-  logs: Record<number, string[]>;
   outputDir: string;
   onCancel: (id: number) => void;
-  onRetry: (job: JobRecord) => void;
 }
 
-/** 队列列表：# / 标题+状态子行 / 类型 / 进度 / 动作（参考图的表式布局） */
-export function QueueList({ jobs, logs, outputDir, onCancel, onRetry }: Props) {
+/** 队列列表：标题+状态子行 / 类型 / 进度 / 动作 */
+export function QueueList({ jobs, outputDir, onCancel }: Props) {
   if (jobs.length === 0) {
     return <div className="empty">{t("queue.empty")}</div>;
   }
   return (
     <div className="table" role="table">
       <div className="thead" role="row">
-        <span className="c-idx">#</span>
         <span className="c-title">{t("queue.colTitle")}</span>
         <span className="c-type">{t("queue.colType")}</span>
         <span className="c-state">{t("queue.colState")}</span>
         <span className="c-act">{t("queue.colAct")}</span>
       </div>
       {jobs.map((job) => (
-        <JobRow key={job.id} job={job} lines={logs[job.id] ?? []} outputDir={outputDir} onCancel={onCancel} onRetry={onRetry} />
+        <JobRow key={job.historyId ?? job.id} job={job} outputDir={outputDir} onCancel={onCancel} />
       ))}
     </div>
   );
@@ -44,18 +40,13 @@ export function QueueList({ jobs, logs, outputDir, onCancel, onRetry }: Props) {
 
 function JobRow({
   job,
-  lines,
   outputDir,
   onCancel,
-  onRetry,
 }: {
   job: JobRecord;
-  lines: string[];
   outputDir: string;
   onCancel: (id: number) => void;
-  onRetry: (job: JobRecord) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const active = job.status === "running" || job.status === "queued";
 
   // 状态子行：这张表的签名细节——一行里同时讲完"是什么阶段、到什么程度"
@@ -71,9 +62,6 @@ function JobRow({
 
   return (
     <div className={`row ${job.status}`} role="row">
-      <span className="c-idx" aria-hidden>
-        {job.id + 1}
-      </span>
       <span className="c-title" title={job.title}>
         <span className="t">{job.title}</span>
         {sub && <span className="s">{sub}</span>}
@@ -108,26 +96,7 @@ function JobRow({
             <Icon name="folder-reveal" size={14} />
           </button>
         )}
-        {(job.status === "failed" || job.status === "cancelled") && (
-          <button className="icon" aria-label={t("queue.retry")} title={t("queue.retry")} onClick={() => onRetry(job)}>
-            <Icon name="retry" size={14} />
-          </button>
-        )}
-        <button
-          className="icon"
-          aria-label={open ? t("queue.logCollapse") : t("queue.logView")}
-          aria-expanded={open}
-          title={open ? t("queue.logCollapse") : t("queue.logView")}
-          onClick={() => setOpen(!open)}
-        >
-          <Icon name="log" size={14} />
-        </button>
       </span>
-      {open && (
-        <pre className="logline" role="region" aria-label={t("queue.logRegion")}>
-          {lines.length === 0 ? t("queue.logEmpty") : lines.join("\n")}
-        </pre>
-      )}
     </div>
   );
 }

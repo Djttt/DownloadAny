@@ -22,6 +22,10 @@ export type JobStatus = "queued" | "running" | "completed" | "failed" | "cancell
 
 export interface JobRecord {
   id: number;
+  /** 持久化历史使用的跨会话唯一标识；当前运行任务没有该字段。 */
+  historyId?: string;
+  /** 写入本地历史的时间戳，用于跨会话排序。 */
+  savedAt?: number;
   url: string;
   title: string;
   formatId: string;
@@ -52,11 +56,6 @@ export interface ProgressEvent {
   totalBytes?: number | null;
   speed?: number | null;
   eta?: number | null;
-}
-
-export interface LogLineEvent {
-  jobId: number;
-  line: string;
 }
 
 export interface DependencyInfo {

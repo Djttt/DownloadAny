@@ -434,18 +434,6 @@ select:focus-visible {
   letter-spacing: 0.4px;
 }
 
-.acc-note {
-  margin-top: 4px;
-  padding: 6px 8px;
-  border-radius: 7px;
-  background: var(--mist);
-  color: var(--ink-soft);
-  font-size: 11.5px;
-  font-weight: 400;
-  line-height: 1.5;
-  white-space: normal;
-}
-
 .acc-name-row {
   display: flex;
   align-items: center;
@@ -990,6 +978,7 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  justify-content: center;
   gap: 8px;
   align-self: stretch;
   min-height: 0;
@@ -998,7 +987,8 @@ select:focus-visible {
 .video-thumb-wrap {
   position: relative;
   width: 100%;
-  height: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
   min-height: 0;
   overflow: hidden;
   border-radius: 8px;
@@ -1448,7 +1438,7 @@ select:focus-visible {
 
 .thead {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 150px 210px 92px;
+  grid-template-columns: minmax(0, 1fr) 150px 210px 92px;
   gap: 10px;
   align-items: center;
   padding: 9px 16px;
@@ -1460,7 +1450,7 @@ select:focus-visible {
 
 .row {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 150px 210px 92px;
+  grid-template-columns: minmax(0, 1fr) 150px 210px 92px;
   gap: 10px;
   align-items: center;
   padding: 10px 16px;
@@ -1473,12 +1463,6 @@ select:focus-visible {
 
 .row:hover {
   background: var(--hover-soft);
-}
-
-.c-idx {
-  color: var(--faint);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
 }
 
 .c-title {
@@ -1601,22 +1585,6 @@ select:focus-visible {
 .icon:hover {
   background: var(--mist);
   color: var(--indigo-ink);
-}
-
-.logline {
-  grid-column: 1 / -1;
-  margin: 6px 0 0;
-  padding: 10px 12px;
-  max-height: 200px;
-  overflow: auto;
-  background: #14161d;
-  color: #c7ccdb;
-  border-radius: 8px;
-  font-family: inherit;
-  font-size: 11px;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  word-break: break-all;
 }
 
 /* ================= 侧栏功能菜单 ================= */
@@ -3080,7 +3048,7 @@ select:focus-visible {
   }
   .thead,
   .row {
-    grid-template-columns: 28px minmax(0, 1fr) 120px 64px;
+    grid-template-columns: minmax(0, 1fr) 120px 64px;
   }
   .thead .c-state,
   .row .c-type {

@@ -287,7 +287,6 @@ export function AccountMenuItem({
               </div>
               <small className="acc-email">{user.email}</small>
               {/* 验证码登录的账户默认没有密码，这里给出设置入口说明 */}
-              {!user.hasPassword && <small className="acc-note">{t("account.noPasswordNote")}</small>}
             </div>
             <button
               className="acc-row"
