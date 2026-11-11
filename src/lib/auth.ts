@@ -82,8 +82,22 @@ function errorMessage(body: unknown, fallback: string): string {
   return typeof message === "string" ? message : fallback;
 }
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
+/** 后端 404：该邮箱没有账号，UI 据此引导去注册。 */
+export class RegisterRequiredError extends Error {
+  constructor(readonly email: string, message: string) {
+    super(message);
+  }
+}
+
+/** 后端 409：该邮箱已有账号，UI 据此跳回登录。 */
+export class AccountExistsError extends Error {
+  constructor(readonly email: string, message: string) {
     super(message);
   }
 }
@@ -141,12 +155,32 @@ export async function loginWithPassword(email: string, password: string, captcha
       const challenge = await request<{ captcha_id: string; question: string }>("/api/auth/captcha");
       throw new CaptchaRequiredError(challenge.captcha_id, challenge.question);
     }
+    if (reason instanceof ApiError && reason.status === 404) {
+      throw new RegisterRequiredError(email, reason.message);
+    }
     throw reason;
   }
 }
 
-// 注册入口已下线：/login/code/send 会对未注册邮箱自动建号（password_hash 为空），
-// 验证码校验通过即登录；密码由用户在「用户中心 → 设置密码」通过 /change-password 补设。
+/** 注册：邮箱 + 密码 + 确认密码，注册成功即登录（后端直接下发令牌）。 */
+export async function registerWithPassword(
+  email: string,
+  password: string,
+  confirmPassword: string,
+): Promise<AuthUser> {
+  try {
+    const tokens = await request<TokenResponse>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password, confirm_password: confirmPassword }),
+    });
+    return acceptTokens(tokens);
+  } catch (reason) {
+    if (reason instanceof ApiError && reason.status === 409) {
+      throw new AccountExistsError(email, reason.message);
+    }
+    throw reason;
+  }
+}
 
 export async function forgotPassword(email: string): Promise<string> {
   const result = await request<{ message: string }>("/api/auth/forgot-password", {
@@ -162,22 +196,6 @@ export async function resetPasswordByEmailCode(email: string, code: string, newP
     body: JSON.stringify({ email, code, new_password: newPassword }),
   });
   return result.message;
-}
-
-export async function sendLoginCode(email: string): Promise<string> {
-  const result = await request<{ message: string }>("/api/auth/login/code/send", {
-    method: "POST",
-    body: JSON.stringify({ email }),
-  });
-  return result.message;
-}
-
-export async function loginWithCode(email: string, code: string): Promise<AuthUser> {
-  const tokens = await request<TokenResponse>("/api/auth/login/code", {
-    method: "POST",
-    body: JSON.stringify({ email, code }),
-  });
-  return acceptTokens(tokens);
 }
 
 export async function loginWithGoogle(authorization: {

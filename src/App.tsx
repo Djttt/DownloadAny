@@ -531,9 +531,9 @@ function App() {
             setAuthOpen(false);
             pendingParse.current = null;
           }}
-          onAuthenticated={(authenticatedUser) => {
+          onAuthenticated={(authenticatedUser, signedUp) => {
             setUser(authenticatedUser);
-            showMessage(t("auth.loginSuccess"), "success");
+            showMessage(signedUp ? t("auth.registerSuccess") : t("auth.loginSuccess"), "success");
             const urls = pendingParse.current;
             pendingParse.current = null;
             if (urls) void startParse(urls);
