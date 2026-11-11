@@ -1,7 +1,7 @@
 //! 编译期内嵌的基础组件，以及首次运行时的安全释放逻辑。
 //!
-//! 二进制以 gzip 形式进入 DownloadAny 主程序，运行时释放到用户数据目录：
-//! `<data>/DownloadAny/tools/<component>/<version>/`。写入使用同目录临时文件和
+//! 二进制以 gzip 形式进入 LumeAny 主程序，运行时释放到用户数据目录：
+//! `<data>/LumeAny/tools/<component>/<version>/`。写入使用同目录临时文件和
 //! 原子重命名，避免崩溃或断电留下半个可执行文件。
 
 use flate2::read::GzDecoder;
@@ -72,7 +72,7 @@ pub fn ensure(id: &str) -> Result<PathBuf, String> {
     }
 
     let target = data_root()?
-        .join("DownloadAny")
+        .join("LumeAny")
         .join("tools")
         .join(&component.id)
         .join(&component.version)
@@ -283,5 +283,5 @@ fn data_root() -> Result<PathBuf, String> {
 }
 
 fn tools_root() -> Result<PathBuf, String> {
-    Ok(data_root()?.join("DownloadAny").join("tools"))
+    Ok(data_root()?.join("LumeAny").join("tools"))
 }

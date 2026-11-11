@@ -1,4 +1,4 @@
-# DownloadAny
+# LumeAny
 
 基于 **Tauri v2 + yt-dlp** 的跨平台桌面视频下载器（Windows / macOS / Linux）。
 

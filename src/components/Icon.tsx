@@ -1,4 +1,4 @@
-// DownloadAny UI 图标集 —— 与 Figma「DownloadAny Icons」文件逐一对应
+// LumeAny UI 图标集
 // (https://www.figma.com/design/e4Qzn8UQK5TrZWGqpN7OPJ)
 // 设计规范：48px 画布（= 24px 网格 2 倍）、描边 4（渲染 2px）、圆角端点/连接，
 // 主色绑定 color/icon/primary —— 代码侧统一 currentColor，由使用处 CSS 控制颜色。

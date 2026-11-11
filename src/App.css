@@ -1,30 +1,34 @@
 :root {
   color-scheme: light;
-  --paper: #f3f3f3;
+  --paper: #f6f5fb;
   --surface: #ffffff;
-  --hairline: #dcdcdc;
-  --ink: #1d1d1d;
-  --muted: #777777;
-  --indigo: #0052d9;
-  --indigo-ink: #003cab;
-  --mist: #ecf2fe;
+  --hairline: #e0ddec;
+  --ink: #211d2e;
+  --muted: #777184;
+  --indigo: #5b3df5;
+  --indigo-ink: #4527c7;
+  --mist: #f0edff;
+  --brand-gradient: linear-gradient(135deg, #1769ff 0%, #5b3df5 52%, #9a2cff 100%);
+  --brand-gradient-hover: linear-gradient(135deg, #0f5ce8 0%, #4d30df 52%, #8620e8 100%);
+  --brand-soft-gradient: linear-gradient(135deg, #edf4ff 0%, #f2edff 58%, #f8efff 100%);
+  --brand-shadow: 0 8px 22px rgba(91, 61, 245, 0.22);
   --green: #2ba471;
   --red: #d54941;
   --amber: #ed7b2f;
   /* 语义灰阶/品牌色细节（主题相关，深色覆盖见文件头 [data-theme="dark"]） */
   --faint: #a1a1aa; /* 占位符、禁用、次要图标 */
-  --ink-soft: #52525b; /* 次级正文(平台卡、菜单图标) */
-  --hover-soft: #fafafa; /* 表格行悬停 */
-  --track: #d4d4d8; /* 开关关闭轨道、滚动条 */
-  --line-strong: #c4c4cc; /* radio 边框、禁用文字 */
+  --ink-soft: #565064; /* 次级正文(平台卡、菜单图标) */
+  --hover-soft: #fbfaff; /* 表格行悬停 */
+  --track: #d7d2e2; /* 开关关闭轨道、滚动条 */
+  --line-strong: #c8c2d4; /* radio 边框、禁用文字 */
   --frost: rgba(255, 255, 255, 0.9); /* 平台墙卡片 */
   --float: rgba(255, 255, 255, 0.98); /* 下拉菜单、飞窗 */
-  --indigo-hover: #366ef4; /* 品牌按钮悬停 */
-  --ring: rgba(0, 82, 217, 0.1); /* 聚焦圈 */
-  --ripple: rgba(0, 82, 217, 0.16); /* 导航点击波纹 */
-  --ripple-on: rgba(0, 82, 217, 0.2);
-  --indigo-glow: rgba(0, 82, 217, 0.08); /* 卡片悬停投影 */
-  --indigo-line: #a6c4ff; /* 悬停浅蓝描边 */
+  --indigo-hover: #482bd8; /* 品牌按钮悬停 */
+  --ring: rgba(91, 61, 245, 0.16); /* 聚焦圈 */
+  --ripple: rgba(91, 61, 245, 0.16); /* 导航点击波纹 */
+  --ripple-on: rgba(91, 61, 245, 0.22);
+  --indigo-glow: rgba(91, 61, 245, 0.12); /* 卡片悬停投影 */
+  --indigo-line: #b8aaff; /* 悬停浅紫描边 */
   --danger-tint-bg: #fef2f2; /* 错误/取消提示底 */
   --danger-bg: #fff0ed; /* 停止按钮悬停底 */
   --danger-ink: #c9352f; /* 错误深红文字 */
@@ -32,9 +36,9 @@
   --danger-ring: rgba(213, 73, 65, 0.12);
   --success-bg: #eef7ee;
   --success-ink: #28723a;
-  --card-soft: #f8faff;
+  --card-soft: #faf9ff;
   --card-shadow: rgba(31, 45, 61, 0.08);
-  --card-shadow-hover: rgba(0, 82, 217, 0.13);
+  --card-shadow-hover: rgba(91, 61, 245, 0.15);
   font-family: "MiSans", "Inter", "Segoe UI", sans-serif;
   font-size: 14px;
 }
@@ -45,30 +49,34 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --paper: #181818;
-  --surface: #242424;
-  --hairline: #3d3d3d;
-  --ink: #e8e8e6;
-  --muted: #939398;
-  --indigo: #4589ff;
-  --indigo-ink: #7cc0ff;
-  --mist: #1c2a44;
+  --paper: #17151e;
+  --surface: #24212d;
+  --hairline: #403a4c;
+  --ink: #eeeaf5;
+  --muted: #9c95a8;
+  --indigo: #8068ff;
+  --indigo-ink: #b5a8ff;
+  --mist: #2d2744;
+  --brand-gradient: linear-gradient(135deg, #367dff 0%, #7255ff 52%, #b044ff 100%);
+  --brand-gradient-hover: linear-gradient(135deg, #2c6fe8 0%, #6346eb 52%, #9c34eb 100%);
+  --brand-soft-gradient: linear-gradient(135deg, #202b45 0%, #30284c 58%, #392442 100%);
+  --brand-shadow: 0 9px 26px rgba(101, 72, 255, 0.3);
   --green: #47b581;
   --red: #e97f76;
   --amber: #eda366;
   --faint: #7a7a80;
   --ink-soft: #b8b8be;
-  --hover-soft: #2c2c2c;
-  --track: #50505a;
-  --line-strong: #5b5b62;
+  --hover-soft: #2d2936;
+  --track: #514a5e;
+  --line-strong: #61596e;
   --frost: rgba(40, 40, 40, 0.9);
   --float: rgba(44, 44, 44, 0.98);
-  --indigo-hover: #6ba3ff;
-  --ring: rgba(69, 137, 255, 0.35);
-  --ripple: rgba(108, 177, 255, 0.2);
-  --ripple-on: rgba(108, 177, 255, 0.3);
-  --indigo-glow: rgba(69, 137, 255, 0.16);
-  --indigo-line: #496aa3;
+  --indigo-hover: #947fff;
+  --ring: rgba(128, 104, 255, 0.35);
+  --ripple: rgba(128, 104, 255, 0.2);
+  --ripple-on: rgba(128, 104, 255, 0.3);
+  --indigo-glow: rgba(128, 104, 255, 0.2);
+  --indigo-line: #6e5ba9;
   --danger-tint-bg: #3a2422;
   --danger-bg: #442a27;
   --danger-ink: #f3a29b;
@@ -76,9 +84,9 @@
   --danger-ring: rgba(233, 127, 118, 0.3);
   --success-bg: #223428;
   --success-ink: #86d9b1;
-  --card-soft: #20242b;
+  --card-soft: #211e2a;
   --card-shadow: rgba(0, 0, 0, 0.24);
-  --card-shadow-hover: rgba(69, 137, 255, 0.2);
+  --card-shadow-hover: rgba(128, 104, 255, 0.24);
 }
 
 /* select 下拉箭头是内联 SVG，描边色无法走 var()，深色下单独换色 */
@@ -98,6 +106,9 @@
 body {
   margin: 0;
   background: var(--paper);
+  background-image:
+    radial-gradient(circle at 78% -20%, rgba(143, 76, 255, 0.08), transparent 38%),
+    radial-gradient(circle at 18% 112%, rgba(23, 105, 255, 0.07), transparent 34%);
   color: var(--ink);
 }
 
@@ -238,13 +249,20 @@ select:focus-visible {
 }
 
 .gem {
-  color: #fff;
   display: grid;
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 23.4%; /* 与 app-icon.svg 母版同比例：rx 60 / 256 */
-  background: var(--indigo);
+  overflow: hidden;
+  border-radius: 23.4%;
+  background: #fff;
+}
+
+.gem img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .side nav {
@@ -306,13 +324,14 @@ select:focus-visible {
 }
 
 .nav.on {
-  background: var(--mist);
+  background: var(--brand-soft-gradient);
   color: var(--indigo-ink);
+  box-shadow: inset 0 0 0 1px rgba(91, 61, 245, 0.08);
 }
 
 .count {
   margin-left: auto;
-  background: var(--indigo);
+  background: var(--brand-gradient);
   color: #fff;
   font-size: 11px;
   font-weight: 600;
@@ -670,11 +689,11 @@ select:focus-visible {
   gap: 7px;
   padding: 8px 34px;
   border-radius: 9px;
-  background: var(--indigo);
+  background: var(--brand-gradient);
   color: #fff;
   font-weight: 600;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
-  transition: background 0.15s ease, transform 0.15s ease;
+  box-shadow: var(--brand-shadow);
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .stop-auto-download {
@@ -712,7 +731,8 @@ select:focus-visible {
 }
 
 .url-bar .big:hover:not(:disabled) {
-  background: var(--indigo-hover);
+  background: var(--brand-gradient-hover);
+  box-shadow: 0 10px 26px rgba(91, 61, 245, 0.28);
   transform: translateY(-1px);
 }
 
@@ -1175,8 +1195,10 @@ select:focus-visible {
 }
 
 .row-download {
-  min-width: 58px;
-  padding: 6px 13px;
+  width: 60px;
+  min-width: 60px;
+  height: 32px;
+  padding: 0;
   border-radius: 7px;
   background: var(--indigo);
   color: #fff;
@@ -1190,8 +1212,8 @@ select:focus-visible {
 }
 
 .row-download.folder-open {
-  min-width: 58px;
-  width: 58px;
+  min-width: 60px;
+  width: 60px;
   height: 32px;
   display: grid;
   place-items: center;
@@ -1250,12 +1272,15 @@ select:focus-visible {
   min-width: 0;
   height: 32px;
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) 108px 44px;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 108px) 60px;
+  gap: 6px;
   align-items: center;
 }
 
 .active-download em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--indigo-ink);
   font-size: 11px;
   font-style: normal;
@@ -1264,11 +1289,14 @@ select:focus-visible {
 }
 
 .cancel-download {
-  height: 28px;
+  width: 60px;
+  min-width: 60px;
+  height: 32px;
   border: 1px solid var(--hairline);
-  border-radius: 7px;
+  border-radius: 9px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .cancel-download:hover {
@@ -1756,22 +1784,21 @@ select:focus-visible {
   width: 34px;
   height: 34px;
   flex: none;
-  border-radius: 23.4%; /* 与 app-icon.svg 母版同比例：rx 60 / 256 */
-  color: #fff;
-  background: var(--indigo);
+  overflow: hidden;
+  border-radius: 23.4%;
+  background: #fff;
+}
+
+.auth-badge img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .auth-headings {
   flex: 1;
   min-width: 0;
-}
-
-.auth-subtitle {
-  margin: 6px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 1.5;
 }
 
 .auth-close {
@@ -1863,9 +1890,9 @@ select:focus-visible {
 }
 
 .auth-method-tabs button.on {
-  background: var(--surface);
+  background: var(--brand-soft-gradient);
   color: var(--indigo-ink);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(91, 61, 245, 0.1), 0 1px 3px rgba(62, 38, 138, 0.08);
 }
 
 .auth-field {
@@ -1876,6 +1903,29 @@ select:focus-visible {
   color: var(--ink);
   font-size: 13px;
   font-weight: 600;
+}
+
+.auth-field > span:first-child {
+  display: flex;
+  align-items: center;
+  min-height: 16px;
+}
+
+.auth-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 16px;
+}
+
+.auth-field-head button {
+  color: var(--indigo);
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.auth-field-head button:hover:not(:disabled) {
+  text-decoration: underline;
 }
 
 .auth-field input {
@@ -1933,27 +1983,6 @@ select:focus-visible {
 .auth-code-row button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
-}
-
-.auth-hint {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: -3px 0 16px;
-  padding: 10px 12px;
-  border: 1px solid var(--indigo-line);
-  border-radius: 9px;
-  background: var(--mist);
-  color: var(--ink-soft);
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 1.55;
-}
-
-.auth-hint svg {
-  flex: none;
-  margin-top: 1px;
-  color: var(--indigo);
 }
 
 .auth-pwd {
@@ -2152,16 +2181,17 @@ select:focus-visible {
   width: 100%;
   padding: 11px 0;
   border-radius: 10px;
-  background: var(--indigo);
+  background: var(--brand-gradient);
   color: #fff;
   font-weight: 600;
   font-size: 14px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
-  transition: background-color 0.15s ease, transform 0.15s ease;
+  box-shadow: var(--brand-shadow);
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .primary:hover {
-  background: var(--indigo-hover);
+  background: var(--brand-gradient-hover);
+  box-shadow: 0 10px 26px rgba(91, 61, 245, 0.28);
 }
 
 .primary:active {

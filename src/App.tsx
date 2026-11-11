@@ -426,9 +426,9 @@ function App() {
       <aside className="side">
         <div className="brand">
           <span className="gem" aria-hidden>
-            <Icon name="app-arrow" size={16} />
+            <img src="/app-icon.png" alt="" />
           </span>
-          <span className="word">DownloadAny</span>
+          <span className="word">LumeAny</span>
         </div>
         <nav aria-label={t("nav.mainAria")}>
           <button

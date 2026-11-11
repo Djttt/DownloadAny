@@ -14,7 +14,6 @@ import {
 import { t } from "../lib/i18n";
 import { googleOAuthLogin } from "../lib/tauri";
 import { EyeIcon } from "./EyeIcon";
-import { Icon } from "./Icon";
 
 // 产品流程：邮箱验证码即可登录（未注册邮箱自动建号，无需密码），
 // 注册入口已下线，密码改由用户中心「设置密码」补设，这里只保留 验证码 / 密码 / 找回密码。
@@ -78,10 +77,25 @@ export function AuthModal({
     revealed: boolean,
     onToggle: () => void,
     onChange: (v: string) => void,
+    action?: { label: string; onClick: () => void },
   ) {
     return (
       <label className="auth-field">
-        <span>{label}</span>
+        <span className="auth-field-head">
+          <span>{label}</span>
+          {action && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={(event) => {
+                event.preventDefault();
+                action.onClick();
+              }}
+            >
+              {action.label}
+            </button>
+          )}
+        </span>
         <span className="auth-pwd">
           <input type={revealed ? "text" : "password"} value={value} disabled={busy} autoComplete={autoComplete} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
           <button
@@ -216,11 +230,10 @@ export function AuthModal({
       <div className="modal auth-modal" role="dialog" aria-modal="true" aria-label={t("auth.title")}>
         <header className="modal-head">
           <span className="auth-badge" aria-hidden>
-            <Icon name="app-arrow" size={20} />
+            <img src="/app-icon.png" alt="" />
           </span>
           <div className="auth-headings">
             <h3>{t("auth.title")}</h3>
-            <p className="auth-subtitle">{t("auth.subtitle")}</p>
           </div>
           <button className="clear auth-close" type="button" onClick={onClose} aria-label={t("common.close")}>×</button>
         </header>
@@ -252,10 +265,6 @@ export function AuthModal({
                   </button>
                 </span>
               </label>
-              <p className="auth-hint">
-                <Icon name="info" size={15} />
-                <span>{t("auth.codeHint")}</span>
-              </p>
             </>
           )}
           {view === "password" && (
@@ -268,6 +277,7 @@ export function AuthModal({
                 reveal,
                 () => setReveal(!reveal),
                 setPassword,
+                { label: t("auth.forgotPassword"), onClick: () => switchView("forgot") },
               )}
               {captcha && (
                 <label className="auth-field">
@@ -275,10 +285,6 @@ export function AuthModal({
                   <input inputMode="numeric" maxLength={4} value={captcha.answer} disabled={busy} placeholder={t("auth.captchaAnswerPlaceholder")} onChange={(event) => setCaptcha({ ...captcha, answer: event.target.value })} />
                 </label>
               )}
-              <p className="auth-hint">
-                <Icon name="info" size={15} />
-                <span>{t("auth.passwordHintCode")}</span>
-              </p>
             </>
           )}
           {view === "forgot" && (
@@ -315,9 +321,6 @@ export function AuthModal({
           <button className="primary auth-submit" type="submit" disabled={busy}>
             {busy ? t("auth.working") : submitLabel}
           </button>
-          {view === "password" && (
-            <button className="auth-link" type="button" disabled={busy} onClick={() => switchView("forgot")}>{t("auth.forgotPassword")}</button>
-          )}
           {view === "forgot" && (
             <button className="auth-link" type="button" disabled={busy} onClick={() => switchView("password")}>{t("auth.backToLogin")}</button>
           )}

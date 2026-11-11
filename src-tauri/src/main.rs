@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    downloadany_lib::run()
+    lumeany_lib::run()
 }

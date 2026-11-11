@@ -179,12 +179,12 @@ pub async fn google_oauth_login(
     let (status, page) = if callback_result.is_ok() {
         (
             "200 OK",
-            "<!doctype html><meta charset=utf-8><title>DownloadAny</title><style>body{font:16px system-ui;text-align:center;padding:64px;color:#202124}</style><h2>登录成功</h2><p>你可以关闭此页面并返回 DownloadAny。</p>",
+            "<!doctype html><meta charset=utf-8><title>LumeAny</title><style>body{font:16px system-ui;text-align:center;padding:64px;color:#202124}</style><h2>登录成功</h2><p>你可以关闭此页面并返回 LumeAny。</p>",
         )
     } else {
         (
             "400 Bad Request",
-            "<!doctype html><meta charset=utf-8><title>DownloadAny</title><style>body{font:16px system-ui;text-align:center;padding:64px;color:#b3261e}</style><h2>登录未完成</h2><p>请关闭此页面并返回 DownloadAny 重试。</p>",
+            "<!doctype html><meta charset=utf-8><title>LumeAny</title><style>body{font:16px system-ui;text-align:center;padding:64px;color:#b3261e}</style><h2>登录未完成</h2><p>请关闭此页面并返回 LumeAny 重试。</p>",
         )
     };
     let response = format!(

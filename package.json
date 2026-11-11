@@ -1,5 +1,5 @@
 {
-  "name": "downloadany",
+  "name": "lumeany",
   "private": true,
   "version": "0.1.1",
   "type": "module",
@@ -8,6 +8,8 @@
     "build": "tsc && vite build",
     "version:set": "node scripts/set-version.mjs",
     "updater:config": "node scripts/write-update-config.mjs",
+    "installer:assets": "powershell -ExecutionPolicy Bypass -File scripts/generate-installer-assets.ps1",
+    "installer:build": "pnpm installer:assets && tauri build --bundles nsis",
     "preview": "vite preview",
     "tauri": "tauri"
   },

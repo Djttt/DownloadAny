@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "DownloadAny",
+  "productName": "LumeAny",
   "version": "0.1.1",
   "identifier": "com.dengjun.downloadany",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "DownloadAny",
+        "title": "LumeAny",
         "width": 1045,
         "height": 707,
         "minWidth": 1045,
@@ -27,13 +27,33 @@
     "active": true,
     "targets": "all",
     "createUpdaterArtifacts": true,
+    "publisher": "LumeAny",
+    "copyright": "Copyright © 2026 LumeAny contributors",
+    "homepage": "https://github.com/Djttt/DownloadAny",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": false,
+        "installerIcon": "installer-assets/installer.ico",
+        "sidebarImage": "installer-assets/installer-sidebar.bmp",
+        "headerImage": "installer-assets/installer-header.bmp",
+        "uninstallerIcon": "installer-assets/uninstaller.ico",
+        "uninstallerHeaderImage": "installer-assets/uninstaller-header.bmp",
+        "installerHooks": "installer-assets/installer-hooks.nsh",
+        "customLanguageFiles": {
+          "SimpChinese": "installer-assets/languages/SimpChinese.nsh",
+          "English": "installer-assets/languages/English.nsh"
+        },
+        "startMenuFolder": "LumeAny"
+      }
+    }
   },
   "plugins": {
     "updater": {

@@ -1000,9 +1000,9 @@ function AboutPane({ updater }: { updater: AppUpdater }) {
     <div className="about-list">
       <div className="about-brand">
         <span className="gem" aria-hidden>
-          <Icon name="app-arrow" size={22} />
+          <img src="/app-icon.png" alt="" />
         </span>
-        <span>DownloadAny</span>
+        <span>LumeAny</span>
       </div>
       {rows.map(([k, v]) => (
         <div className="about-row" key={k}>
