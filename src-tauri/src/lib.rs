@@ -3,6 +3,7 @@ mod commands;
 mod component_updater;
 mod embedded_components;
 mod error;
+mod mcp_prefs;
 mod nettest;
 mod probe;
 mod progress;
