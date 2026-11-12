@@ -4,6 +4,7 @@ mod component_updater;
 mod embedded_components;
 mod error;
 mod mcp_prefs;
+mod mcp_tools;
 mod nettest;
 mod probe;
 mod progress;
