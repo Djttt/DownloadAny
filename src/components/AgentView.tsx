@@ -4,13 +4,6 @@ import { t } from "../lib/i18n";
 import type { McpStatus } from "../types";
 import "../Agent.css";
 
-const MCP_URL = "http://127.0.0.1:8790/mcp";
-const CONFIG_JSON = JSON.stringify(
-  { mcpServers: { lumeany: { type: "streamable-http", url: MCP_URL } } },
-  null,
-  2,
-);
-
 function CopyButton({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef(0);
@@ -91,26 +84,6 @@ export function AgentView() {
             {t("agent.errorPrefix", { error: status.error })}
           </p>
         )}
-      </section>
-
-      <section className={`agent-card${running ? "" : " off"}`}>
-        <div className="agent-field">
-          <span className="agent-label">{t("agent.endpoint")}</span>
-          <code className="agent-mono">{MCP_URL}</code>
-          <CopyButton text={MCP_URL} />
-        </div>
-        <div className="agent-field column">
-          <div className="agent-field-line">
-            <span className="agent-label">{t("agent.configTitle")}</span>
-            <CopyButton text={CONFIG_JSON} />
-          </div>
-          <pre className="agent-pre">{CONFIG_JSON}</pre>
-          <p className="agent-hint">{t("agent.configHint")}</p>
-          <div className="agent-cli">
-            <code className="agent-mono">{t("agent.cliHint")}</code>
-            <CopyButton text={t("agent.cliHint")} />
-          </div>
-        </div>
       </section>
 
       <section className={`agent-card${running ? "" : " off"}`}>

@@ -243,7 +243,7 @@ select:focus-visible {
   align-items: center;
   gap: 8px;
   font-weight: 700;
-  font-size: 15px;
+  font-size: 16px;
   letter-spacing: -0.02em;
   padding: 0 8px 18px;
 }
@@ -251,8 +251,8 @@ select:focus-visible {
 .gem {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   overflow: hidden;
   border-radius: 23.4%;
   background: #fff;
@@ -281,6 +281,7 @@ select:focus-visible {
   padding: 9px 10px;
   border-radius: 9px;
   color: var(--muted);
+  font-size: 15px;
   font-weight: 550;
   text-align: left;
 }
@@ -382,7 +383,7 @@ select:focus-visible {
 .account-copy strong {
   overflow: hidden;
   color: var(--ink);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -391,7 +392,7 @@ select:focus-visible {
 
 .account-copy small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.2;
 }
 
@@ -1611,6 +1612,7 @@ select:focus-visible {
   padding: 9px 10px;
   border-radius: 6px;
   color: var(--muted);
+  font-size: 15px;
   font-weight: 550;
   text-align: left;
   transition: color 0.2s ease, background-color 0.2s ease;

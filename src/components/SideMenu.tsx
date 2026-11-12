@@ -39,8 +39,8 @@ const I = {
       <rect x="16.8" y="14.5" width="4.2" height="6" rx="1.6" />
     </svg>
   ),
-  feedback: <Icon name="feedback" size={17} />,
-  gear: <Icon name="settings" size={17} />,
+  feedback: <Icon name="feedback" size={18} />,
+  gear: <Icon name="settings" size={18} />,
   telegram: (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M22 2 11 13" />
@@ -200,7 +200,7 @@ export function AccountMenuItem({
 }) {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [open, setOpen] = useState(false);
-  const [anchor, setAnchor] = useState<{ left: number; bottom: number } | null>(null);
+  const [anchor, setAnchor] = useState<{ left: number; bottom: number; width: number } | null>(null);
   const entryRef = useRef<HTMLButtonElement>(null);
   const closeTimer = useRef(0);
 
@@ -214,8 +214,9 @@ export function AccountMenuItem({
     if (!r) return;
     // 卡片弹在条目正上方(侧栏内，向上展开盖住菜单区)
     setAnchor({
-      left: Math.max(8, r.left - 4),
+      left: r.left,
       bottom: window.innerHeight - r.top + 6,
+      width: r.width,
     });
     window.clearTimeout(closeTimer.current);
     setOpen(true);
@@ -275,7 +276,7 @@ export function AccountMenuItem({
         createPortal(
           <div
             className="flyout flyout-account"
-            style={{ position: "fixed", left: anchor.left, bottom: anchor.bottom, zIndex: 95 }}
+            style={{ position: "fixed", left: anchor.left, bottom: anchor.bottom, width: anchor.width, zIndex: 95 }}
             onMouseEnter={keepOpen}
             onMouseLeave={scheduleClose}
           >

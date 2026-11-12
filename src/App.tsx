@@ -486,7 +486,7 @@ function App() {
               setView("download");
             }}
           >
-            <Icon name="download" size={15} />
+            <Icon name="download" size={18} />
             <span>{t("nav.download")}</span>
             {running > 0 && <span className="count">{running}</span>}
           </button>
@@ -497,7 +497,7 @@ function App() {
               setView("history");
             }}
           >
-            <Icon name="history" size={15} />
+            <Icon name="history" size={18} />
             <span>{t("nav.history")}</span>
           </button>
           <button
@@ -507,7 +507,7 @@ function App() {
               setView("agent");
             }}
           >
-            <Icon name="agent" size={15} />
+            <Icon name="agent" size={18} />
             <span>{t("nav.agent")}</span>
           </button>
         </nav>

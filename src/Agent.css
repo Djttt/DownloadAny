@@ -113,47 +113,10 @@
   padding: 6px 10px;
 }
 
-.agent-field {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.agent-field:last-child {
-  margin-bottom: 0;
-}
-
-.agent-field.column {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 6px;
-}
-
-.agent-field-line {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.agent-field-line .agent-copy {
-  margin-left: auto;
-}
-
 .agent-label {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--ink-soft);
-}
-
-.agent-mono {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 12.5px;
-  background: var(--mist);
-  color: var(--indigo-ink);
-  border-radius: 6px;
-  padding: 3px 8px;
-  overflow-wrap: anywhere;
 }
 
 .agent-copy {
@@ -170,34 +133,6 @@
 .agent-copy:hover {
   border-color: var(--indigo-line);
   color: var(--indigo-ink);
-}
-
-.agent-pre {
-  margin: 0;
-  background: var(--card-soft);
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 12px;
-  line-height: 1.45;
-  overflow-x: auto;
-  white-space: pre;
-  scrollbar-width: none;
-}
-
-.agent-cli {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.agent-cli .agent-mono {
-  flex: 1;
-  min-width: 0;
-  overflow-x: auto;
-  white-space: nowrap;
-  scrollbar-width: none;
 }
 
 /* 提示词行：虚线分隔，散文提示词 + 复制按钮 */
