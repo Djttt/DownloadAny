@@ -1,0 +1,140 @@
+//! MCP 服务生命周期：Streamable HTTP 挂 127.0.0.1:8790/mcp，默认关闭、随开随停。
+//! bind 失败以状态结构返回（Ok），不炸调用方；停止走优雅关停 + 3s 兜底 abort。
+
+use crate::{error::AppError, mcp_tools::AgentTools, queue};
+use rmcp::transport::streamable_http_server::{
+    session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
+};
+use serde::Serialize;
+use std::sync::Arc;
+use tokio::{net::TcpListener, sync::oneshot};
+
+pub const MCP_PORT: u16 = 8790;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpStatus {
+    pub running: bool,
+    pub port: u16,
+    pub error: Option<String>,
+}
+
+impl Default for McpStatus {
+    fn default() -> Self {
+        Self {
+            running: false,
+            port: MCP_PORT,
+            error: None,
+        }
+    }
+}
+
+struct Runtime {
+    join: tokio::task::JoinHandle<()>,
+    shutdown: oneshot::Sender<()>,
+}
+
+/// 至多一个运行实例；命令级互斥天然覆盖快速开关竞态
+static RUNTIME: tokio::sync::Mutex<Option<Runtime>> = tokio::sync::Mutex::const_new(None);
+
+#[tauri::command]
+pub async fn mcp_status() -> McpStatus {
+    if RUNTIME.lock().await.is_some() {
+        McpStatus {
+            running: true,
+            port: MCP_PORT,
+            error: None,
+        }
+    } else {
+        McpStatus::default()
+    }
+}
+
+#[tauri::command]
+pub async fn set_mcp_enabled(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, queue::AppState>,
+    on: bool,
+) -> Result<McpStatus, AppError> {
+    let mut guard = RUNTIME.lock().await;
+    if !on {
+        if let Some(rt) = guard.take() {
+            let Runtime { mut join, shutdown } = rt;
+            let _ = shutdown.send(());
+            if tokio::time::timeout(std::time::Duration::from_secs(3), &mut join)
+                .await
+                .is_err()
+            {
+                join.abort();
+                eprintln!("MCP server did not exit within 3s, aborted");
+            }
+        }
+        return Ok(McpStatus::default());
+    }
+    if guard.is_some() {
+        return Ok(McpStatus {
+            running: true,
+            port: MCP_PORT,
+            error: None,
+        });
+    }
+    let listener = match TcpListener::bind(("127.0.0.1", MCP_PORT)).await {
+        Ok(l) => l,
+        Err(e) => {
+            return Ok(McpStatus {
+                running: false,
+                port: MCP_PORT,
+                error: Some(e.to_string()),
+            })
+        }
+    };
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+    let state = state.inner().clone();
+    let service = StreamableHttpService::new(
+        move || Ok(AgentTools::new(app.clone(), state.clone())),
+        Arc::new(LocalSessionManager::default()),
+        StreamableHttpServerConfig::default().with_json_response(true),
+    );
+    let router = axum::Router::new().nest_service("/mcp", service);
+    let join = tokio::spawn(async move {
+        let server = axum::serve(listener, router)
+            .with_graceful_shutdown(async move { let _ = shutdown_rx.await; });
+        if let Err(e) = server.await {
+            eprintln!("MCP server exited with error: {e}");
+        }
+    });
+    *guard = Some(Runtime {
+        join,
+        shutdown: shutdown_tx,
+    });
+    Ok(McpStatus {
+        running: true,
+        port: MCP_PORT,
+        error: None,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{McpStatus, MCP_PORT};
+
+    #[test]
+    fn mcp_status_wire_shape_for_frontend() {
+        assert_eq!(MCP_PORT, 8790);
+        // 关闭态：前端按 {running, port, error} camelCase 直读，error 缺省必须是 null 而非缺席
+        let off = McpStatus::default();
+        assert_eq!(
+            serde_json::to_value(&off).unwrap(),
+            serde_json::json!({ "running": false, "port": 8790, "error": null })
+        );
+        let err = McpStatus {
+            running: false,
+            port: MCP_PORT,
+            error: Some("Address in use".into()),
+        };
+        assert_eq!(
+            serde_json::to_value(&err).unwrap()["error"],
+            "Address in use"
+        );
+    }
+}
