@@ -1,13 +1,19 @@
-//! MCP 工具面：四个 tool 直连 queue/probe 现成管线。
+//! MCP 工具面：解析统一请求业务后端，下载/进度/取消直连本地 queue 管线。
 //! agent 可达的 format_id 走窄白名单（本次 probe 返回的可见选项 + 最佳/MP3 哨兵），
 //! `args.rs` 的宽校验仍是下载命令的唯一边界。
 
-use crate::{args, mcp_prefs, probe::FormatOption, queue::{self, AppState, ProbedInfo}};
+use crate::{
+    args,
+    backend::{self, BackendAuthState},
+    mcp_prefs,
+    probe::FormatOption,
+    queue::{self, AppState, ProbedInfo},
+};
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{CallToolResult, ErrorData};
-use rmcp::{schemars, tool, tool_handler, tool_router, ServerHandler};
+use rmcp::{ServerHandler, schemars, tool, tool_handler, tool_router};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tauri::AppHandle;
@@ -35,9 +41,7 @@ pub fn agent_formats<'a>(formats: &'a [FormatOption]) -> Vec<&'a FormatOption> {
 
 /// MCP 入口的窄格式白名单：仅本次 probe 返回过的可见选项
 pub fn format_allowed(meta: &ProbedInfo, raw: &str) -> bool {
-    agent_formats(&meta.formats)
-        .iter()
-        .any(|f| f.id == raw)
+    agent_formats(&meta.formats).iter().any(|f| f.id == raw)
 }
 
 fn internal_err(e: impl std::fmt::Display) -> ErrorData {
@@ -71,23 +75,30 @@ pub struct CancelArgs {
 pub struct AgentTools {
     app: AppHandle,
     state: AppState,
+    auth: BackendAuthState,
     /// url -> probe 时用过的代理：探测/下载同代理，避免"探测成功下载连不上"割裂
     proxy_memory: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl AgentTools {
-    pub fn new(app: AppHandle, state: AppState) -> Self {
+    pub fn new(app: AppHandle, state: AppState, auth: BackendAuthState) -> Self {
         Self {
             app,
             state,
+            auth,
             proxy_memory: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
     /// 代理优先级：显式参数 → 该 URL probe 时记忆 → 设置页持久化偏好
-    fn resolve_proxy(&self, url: &str, explicit: Option<&str>) -> Result<Option<String>, ErrorData> {
+    fn resolve_proxy(
+        &self,
+        url: &str,
+        explicit: Option<&str>,
+    ) -> Result<Option<String>, ErrorData> {
         if let Some(raw) = explicit {
-            return args::validate_proxy(Some(raw)).map_err(|e| ErrorData::invalid_params(e.to_string(), None));
+            return args::validate_proxy(Some(raw))
+                .map_err(|e| ErrorData::invalid_params(e.to_string(), None));
         }
         if let Some(p) = self.proxy_memory.lock().unwrap().get(url) {
             return Ok(Some(p.clone()));
@@ -103,11 +114,32 @@ impl AgentTools {
                 .insert(url.to_string(), p.clone());
         }
     }
+
+    async fn probe_backend_and_cache(
+        &self,
+        url: &str,
+    ) -> Result<crate::probe::VideoInfo, ErrorData> {
+        let info = backend::parse_video(&self.auth, url)
+            .await
+            .map_err(internal_err)?;
+        let formats = info.formats.clone();
+        self.state.cache_probe(
+            url,
+            ProbedInfo {
+                valid_ids: std::collections::HashSet::new(),
+                title: info.title.clone(),
+                formats,
+            },
+        );
+        Ok(info)
+    }
 }
 
 #[tool_router]
 impl AgentTools {
-    #[tool(description = "解析视频链接，返回标题、时长（秒）与人读清晰度选项；formats[].id 即 start_download 的 formatId 取值（__best__ 为最高画质，__audio_mp3__ 仅音频）。proxy 可省略，缺省沿用应用设置页的代理偏好。")]
+    #[tool(
+        description = "通过 LumeAny 后端解析视频链接，返回标题、时长（秒）与人读清晰度选项；formats[].id 即 start_download 的 formatId 取值（__best__ 为最高画质，__audio_mp3__ 仅音频）。proxy 可省略，仅用于后续本地下载。"
+    )]
     async fn probe_video(
         &self,
         Parameters(p): Parameters<ProbeArgs>,
@@ -115,9 +147,7 @@ impl AgentTools {
         let url = p.url.trim().to_string();
         args::validate_url(&url).map_err(internal_err)?;
         let proxy = self.resolve_proxy(&url, p.proxy.as_deref())?;
-        let info = queue::probe_and_cache(&url, proxy.as_deref(), &self.state)
-            .await
-            .map_err(internal_err)?;
+        let info = self.probe_backend_and_cache(&url).await?;
         self.remember_proxy(&url, proxy.as_ref());
         let formats: Vec<Value> = agent_formats(&info.formats)
             .into_iter()
@@ -139,7 +169,9 @@ impl AgentTools {
         })))
     }
 
-    #[tool(description = "下发下载任务到 LumeAny 队列（界面上实时可见）。formatId 必须是本会话 probe_video 返回的 id，或 __best__（缺省）/ __audio_mp3__；未解析过的链接会自动先解析。完成后用 list_jobs 查询 outputPath。")]
+    #[tool(
+        description = "下发下载任务到 LumeAny 队列（界面上实时可见）。formatId 必须是本会话 probe_video 返回的 id，或 __best__（缺省）/ __audio_mp3__；未解析过的链接会自动先解析。完成后用 list_jobs 查询 outputPath。"
+    )]
     async fn start_download(
         &self,
         Parameters(p): Parameters<StartArgs>,
@@ -149,9 +181,7 @@ impl AgentTools {
         let format_id = p.format_id.unwrap_or_else(|| args::FMT_BEST.to_string());
         let proxy = self.resolve_proxy(&url, p.proxy.as_deref())?;
         if self.state.probe_meta(&url).is_none() {
-            queue::probe_and_cache(&url, proxy.as_deref(), &self.state)
-                .await
-                .map_err(internal_err)?;
+            self.probe_backend_and_cache(&url).await?;
             self.remember_proxy(&url, proxy.as_ref());
         }
         let meta = self
@@ -196,12 +226,18 @@ impl AgentTools {
         Ok(CallToolResult::structured(json!({ "jobId": job_id })))
     }
 
-    #[tool(description = "列出所有下载任务：id、状态（queued/running/completed/failed/cancelled）、进度百分比、速度、剩余时间、完成后的 outputPath 文件路径。")]
+    #[tool(
+        description = "列出所有下载任务：id、状态（queued/running/completed/failed/cancelled）、进度百分比、速度、剩余时间、完成后的 outputPath 文件路径。"
+    )]
     async fn list_jobs(&self) -> Result<CallToolResult, ErrorData> {
-        Ok(CallToolResult::structured(json!({ "jobs": self.state.list() })))
+        Ok(CallToolResult::structured(
+            json!({ "jobs": self.state.list() }),
+        ))
     }
 
-    #[tool(description = "按 jobId 取消下载任务（终止整个进程组，含 FFmpeg 子进程）。已完成的任务取消会静默成功。")]
+    #[tool(
+        description = "按 jobId 取消下载任务（终止整个进程组，含 FFmpeg 子进程）。已完成的任务取消会静默成功。"
+    )]
     async fn cancel_download(
         &self,
         Parameters(p): Parameters<CancelArgs>,

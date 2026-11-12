@@ -1,4 +1,5 @@
 mod args;
+mod backend;
 mod commands;
 mod component_updater;
 mod embedded_components;
@@ -32,7 +33,9 @@ pub fn run() {
             Ok(())
         })
         .manage(AppState::new())
+        .manage(backend::BackendAuthState::default())
         .invoke_handler(tauri::generate_handler![
+            backend::set_backend_session,
             commands::probe_video,
             commands::cache_probe_result,
             commands::enqueue_download,

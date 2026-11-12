@@ -26,6 +26,10 @@ pub enum AppError {
     JobNotFound(u64),
     #[error("Google 登录失败：{0}")]
     GoogleAuth(String),
+    #[error("后端认证失败：{0}")]
+    BackendAuth(String),
+    #[error("后端解析失败：{0}")]
+    Backend(String),
     #[error("IO 错误：{0}")]
     Io(#[from] std::io::Error),
 }

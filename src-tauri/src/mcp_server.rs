@@ -1,9 +1,9 @@
 //! MCP 服务生命周期：Streamable HTTP 挂 127.0.0.1:8790/mcp，默认关闭、随开随停。
 //! bind 失败以状态结构返回（Ok），不炸调用方；停止走优雅关停 + 3s 兜底 abort。
 
-use crate::{error::AppError, mcp_tools::AgentTools, queue};
+use crate::{backend::BackendAuthState, error::AppError, mcp_tools::AgentTools, queue};
 use rmcp::transport::streamable_http_server::{
-    session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
+    StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
 };
 use serde::Serialize;
 use std::sync::Arc;
@@ -66,6 +66,7 @@ pub async fn mcp_status() -> McpStatus {
 pub async fn set_mcp_enabled(
     app: tauri::AppHandle,
     state: tauri::State<'_, queue::AppState>,
+    auth: tauri::State<'_, BackendAuthState>,
     on: bool,
 ) -> Result<McpStatus, AppError> {
     let mut guard = RUNTIME.lock().await;
@@ -98,20 +99,22 @@ pub async fn set_mcp_enabled(
                 running: false,
                 port: MCP_PORT,
                 error: Some(e.to_string()),
-            })
+            });
         }
     };
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
     let state = state.inner().clone();
+    let auth = auth.inner().clone();
     let service = StreamableHttpService::new(
-        move || Ok(AgentTools::new(app.clone(), state.clone())),
+        move || Ok(AgentTools::new(app.clone(), state.clone(), auth.clone())),
         Arc::new(LocalSessionManager::default()),
         StreamableHttpServerConfig::default().with_json_response(true),
     );
     let router = axum::Router::new().nest_service("/mcp", service);
     let join = tokio::spawn(async move {
-        let server = axum::serve(listener, router)
-            .with_graceful_shutdown(async move { let _ = shutdown_rx.await; });
+        let server = axum::serve(listener, router).with_graceful_shutdown(async move {
+            let _ = shutdown_rx.await;
+        });
         if let Err(e) = server.await {
             eprintln!("MCP server exited with error: {e}");
         }
@@ -159,10 +162,7 @@ mod tests {
             tokio::task::yield_now().await;
         }
         let (tx, _rx) = oneshot::channel::<()>();
-        *RUNTIME.lock().await = Some(Runtime {
-            join,
-            shutdown: tx,
-        });
+        *RUNTIME.lock().await = Some(Runtime { join, shutdown: tx });
         let s = mcp_status().await;
         assert!(!s.running, "dead task must not report running");
         assert!(RUNTIME.lock().await.is_none(), "dead entry must be reaped");
@@ -187,7 +187,9 @@ mod tests {
         let (tx, rx) = oneshot::channel::<()>();
         tokio::spawn(async move {
             let _ = axum::serve(listener, router)
-                .with_graceful_shutdown(async move { let _ = rx.await; })
+                .with_graceful_shutdown(async move {
+                    let _ = rx.await;
+                })
                 .await;
         });
 
