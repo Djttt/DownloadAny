@@ -313,7 +313,6 @@ export function AuthModal({
           )}
           {view === "register" && (
             <>
-              <p className="auth-note">{t("auth.passwordHint")}</p>
               {passwordRow(
                 t("auth.password"),
                 t("auth.passwordPlaceholder"),
