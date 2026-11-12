@@ -11,10 +11,10 @@ const zh = {
   "nav.mainAria": "主导航",
   "nav.download": "下载",
   "nav.history": "历史",
-  "nav.agent": "Agent 接入",
+  "nav.agent": "MCP",
 
   // Agent 接入（内置 MCP 服务）
-  "app.agentTitle": "Agent 接入",
+  "app.agentTitle": "MCP",
   "agent.subtitle": "让 AI Agent 通过 MCP 协议连接本机 LumeAny，解析链接并下发下载任务。",
   "agent.statusOn": "服务运行中",
   "agent.statusOff": "服务未启动",
@@ -266,9 +266,9 @@ const en: Record<TKey, string> = {
   "nav.mainAria": "Main navigation",
   "nav.download": "Downloads",
   "nav.history": "History",
-  "nav.agent": "Agent Access",
+  "nav.agent": "MCP",
 
-  "app.agentTitle": "Agent Access",
+  "app.agentTitle": "MCP",
   "agent.subtitle": "Let AI agents connect to LumeAny on this machine over MCP to parse links and dispatch downloads.",
   "agent.statusOn": "Server running",
   "agent.statusOff": "Server stopped",
