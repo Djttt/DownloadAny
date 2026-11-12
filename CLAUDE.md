@@ -46,13 +46,17 @@ Rust 侧（`src-tauri/src/`，一模块一职责）：
 - `progress.rs` — 解析 `--progress-template` 输出的竖线协议：`PROGRESS|percent|downloaded|total|total_estimate|speed|eta`，未知值 yt-dlp 打印 `None`/`NA` 而非 JSON null，因此不用 JSON。进度行实测出现在 **stdout**（stderr 同时消费）
 - `queue.rs` — 任务状态机：`AppState`(Arc<Inner>) + Semaphore(3) 并发、`CommandChild` 无（自持 pid）、取消走进程组终止（Unix `process_group(0)` + `kill -TERM/-9 -<pgid>`，杀到 FFmpeg 孙进程；Windows `taskkill /T /F`）、120s 静默看门狗、探测结果 format_id 白名单缓存
 - `commands.rs` — 主要 IPC 面：`probe_video`（带 proxy 参数） / `enqueue_download` / `cancel_download` / `list_jobs` / `dependency_info` / `set_max_concurrency` / `detect_proxy`（TCP 连通性探测本机常见代理端口，仅作填充建议）
+- `mcp_server.rs` — Agent 接入生命周期：rmcp Streamable HTTP 挂 `127.0.0.1:8790/mcp`（axum nest_service + LocalSessionManager），IPC `set_mcp_enabled`/`mcp_status`；RUNTIME 互斥串行开关，bind 失败返回状态 `error` 字段而非 Err；每次启动默认关闭
+- `mcp_tools.rs` — MCP 工具面（probe_video/start_download/list_jobs/cancel_download），直连 queue/probe 管线；agent 面窄格式白名单（本次 probe 可见项 + `__best__`/`__audio_mp3__`）；未 probe 过的 URL 在 start_download 内自动先 probe；代理记忆 url→probe 用过的值
+- `mcp_prefs.rs` — 设置页偏好的 Rust 侧镜像：`StoreExt` 读 `settings.json`（proxyType/proxyAddr→`build_proxy_url` 对齐前端、outputDir 缺省回退系统下载目录）
 - `embedded_components.rs` — 内嵌组件释放底座：`ensure()` 优先读 `tools/<id>/active.json` 指针（热更过的版本，验 SHA 后用），否则从 include_bytes 的 gz 原子释放内嵌版；`install_remote()` 落新版本目录 + 原子翻转指针。清单来源的 id/version/fileName 一律过 `validate_segment`（限 `[A-Za-z0-9._+-]`）防路径穿越
 - `component_updater.rs` — IPC `update_ytdlp_component(channel, deviceId)`：查 `{DOWNLOADANY_API_BASE_URL}/api/updates/components/yt-dlp/<triple>/<当前版本>`（204=已最新；基址是 Rust 编译期 env，未配置则静默 no-op；release 强制 HTTPS）→ **SHA-256 + minisign 双校验**（与整包更新同一把公钥，硬编码在本文件）→ `install_remote`，下次 spawn 即新版本
 - `error.rs` — `AppError`（thiserror），序列化为字符串直接给前端展示
 
 前端（`src/`）：
 
-- 界面为浅色侧栏布局（参考 SnapAny）：侧栏（下载/历史视图切换）+ UrlBar + 自动下载开关 + 表式任务列表（行内进度与"状态子行"）+ 底部保存目录栏。令牌定义在 `App.css` `:root`
+- 界面为浅色侧栏布局（参考 SnapAny）：侧栏（下载/历史/Agent 接入视图切换，`AgentView.tsx` + `Agent.css`）+ UrlBar + 自动下载开关 + 表式任务列表（行内进度与"状态子行"）+ 底部保存目录栏。令牌定义在 `App.css` `:root`
+- agent 下发的任务 UI 对等：事件层 `hydrateAgentJob`（500ms 宽限 + `list_jobs` 回填标题/清晰度）与 `recordJobStart` 埋点去重（`trackedStarted`/`pendingHydrate`），UI 入队与 agent 共用同一 started/terminal 口径
 - `types.ts` 是前后端契约，**必须镜像 Rust serde 结构（全部 `#[serde(rename_all = "camelCase")]`）**；改 Rust 结构必须同步改这里（如 `JobRecord.formatId` 支撑失败重试）
 - `App.tsx` 以 jobId 归并三个事件到 `jobs`/`logs` map；骨架记录可能先于 invoke resolve 到达，upsert 时勿覆盖未知字段。队列是纯内存的，重启即空（页面 HMR 重载后 Rust 状态还在，靠 `list_jobs` hydration 找回）
 - `lib/updater.ts` — 整包自更新 hook `useAppUpdater(hasActiveJobs)`（tauri-plugin-updater 纯前端编排，Rust 零逻辑）：启动 5s 自动静默 check（失败不打扰），发现新版本弹右下角浮动提示 `UpdateNotice`；手动 checkNow 不弹浮层，结果只在设置-关于页内展示（浮层可见时关于页更新块让位，保证同一时刻只有一处更新提示；收起浮层后回落为关于页入口）；请求头带 `X-DownloadAny-Device-Id/Channel`（服务端灰度分桶）；有 queued/running 任务时 install 进 `blocked`；skip 记版本进 store 后自动检查不再提示。组件热更新由 `App.tsx` 启动 15s 后触发，尽力而为、失败吞掉
@@ -66,6 +70,7 @@ Rust 侧（`src-tauri/src/`，一模块一职责）：
 - 更新端点分两层：dev 构建指 GitHub `latest.json`；发布构建由 `write-update-config.mjs` 用 CI Variable `DOWNLOADANY_API_BASE_URL` 生成 `tauri.release.conf.json` 走自有后端。**`DOWNLOADANY_API_BASE_URL` 是 Rust 编译期环境变量，与前端联调用的 `VITE_API_BASE_URL`（运行时、可走 ssh -L 隧道）是两回事，勿混用**；前者未配置 ⇒ 组件热更新静默禁用
 - 组件热更新只覆盖 yt-dlp（ffmpeg 无远程通道）；旧版本目录保留、可删 `active.json` 回退内嵌版。更新下载都发生在 Rust/插件侧（reqwest），不受 webview CSP 约束，`connect-src` 无需为更新域名放行
 - 修改任何传给 yt-dlp 的参数：过 `args.rs` 白名单，不在别处拼命令
+- MCP 的格式白名单在 `mcp_tools.rs`（窄：仅本次 probe 可见项+两哨兵，挡字幕/封面/m4a/裸高度等 sidecar 形态）；`args.rs` 宽校验仍是下载命令的唯一边界，MCP 不绕过它、只在其上再收窄
 - capabilities（`src-tauri/capabilities/default.json`）：shell 插件已随内嵌组件改造移除，进程仍由 Rust 自 spawn、不经 scope 校验；`updater:default` 与 `process:allow-restart` 是整包自更新的硬依赖，勿删
 - release profile 有 `panic = "abort"`，勿在 command 路径依赖 catch panic
 - `tauri.conf.json` CSP 已收紧，`connect-src` 仅 ipc + `127.0.0.1:8000/8001`（本地后端/ssh -L 隧道，见 README），改远程 API 直连地址必须同步加白，否则 webview 直接拦掉
