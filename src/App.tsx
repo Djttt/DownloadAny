@@ -40,6 +40,7 @@ import { restoreUser, type AuthUser } from "./lib/auth";
 import { useAppUpdater } from "./lib/updater";
 import { Icon } from "./components/Icon";
 import { UrlBar } from "./components/UrlBar";
+import { AgentView } from "./components/AgentView";
 import { AuthModal } from "./components/AuthModal";
 import { FormatBar } from "./components/VideoCard";
 import { QueueList } from "./components/QueueList";
@@ -56,7 +57,7 @@ import "./App.css";
 
 const TERMINAL: JobRecord["status"][] = ["completed", "failed", "cancelled"];
 
-type View = "download" | "history";
+type View = "download" | "history" | "agent";
 type Dialog = "feedback" | "settings";
 type ParsedVideo = { key: string; order: number; url: string; info: VideoInfo };
 type AppMessage = { id: number; text: string; type: "success" | "error" | "info" };
@@ -449,6 +450,16 @@ function App() {
             <Icon name="history" size={15} />
             <span>{t("nav.history")}</span>
           </button>
+          <button
+            className={view === "agent" ? "nav on" : "nav"}
+            onClick={(event) => {
+              showNavRipple(event);
+              setView("agent");
+            }}
+          >
+            <Icon name="agent" size={15} />
+            <span>{t("nav.agent")}</span>
+          </button>
         </nav>
         <div className="side-menu">
           <SupportMenuItem />
@@ -465,7 +476,9 @@ function App() {
       </aside>
 
       <main className="main">
-        {view === "download" ? (
+        {view === "agent" ? (
+          <AgentView />
+        ) : view === "download" ? (
           <>
             <header className="head">
               <h1>{t("app.title")}</h1>

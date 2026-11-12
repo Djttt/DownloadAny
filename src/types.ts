@@ -58,6 +58,13 @@ export interface ProgressEvent {
   eta?: number | null;
 }
 
+// 镜像 mcp_server.rs McpStatus（camelCase）；error 常驻为 null，勿加 skip
+export interface McpStatus {
+  running: boolean;
+  port: number;
+  error: string | null;
+}
+
 export interface DependencyInfo {
   ytDlpVersion?: string | null;
   ytDlpSource: string;
