@@ -121,7 +121,10 @@ export function AgentView() {
           <li>{t("agent.toolList")}</li>
           <li>{t("agent.toolCancel")}</li>
         </ul>
-        <p className="agent-note">{t("agent.prefsNote")}</p>
+        <div className="agent-note">
+          <code className="agent-mono">{t("agent.prompt")}</code>
+          <CopyButton text={t("agent.prompt")} />
+        </div>
       </section>
     </div>
   );

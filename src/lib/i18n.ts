@@ -31,7 +31,7 @@ const zh = {
   "agent.toolDownload": "start_download — 下发下载任务（格式取自解析结果）",
   "agent.toolList": "list_jobs — 查询所有任务的状态、进度与文件路径",
   "agent.toolCancel": "cancel_download — 按任务 ID 取消下载",
-  "agent.prefsNote": "Agent 任务与界面共享同一队列与设置：保存目录、并发上限、代理均取设置页当前值。",
+  "agent.prompt": "使用 LumeAny MCP（http://127.0.0.1:8790/mcp）帮我下载视频：probe_video 解析、start_download 下载、list_jobs 查进度。",
   "agent.errorPrefix": "启动失败：{error}",
 
   "menu.support": "联系客服",
@@ -285,7 +285,7 @@ const en: Record<TKey, string> = {
   "agent.toolDownload": "start_download — dispatch a download (format from probe results)",
   "agent.toolList": "list_jobs — query status, progress and file paths of all jobs",
   "agent.toolCancel": "cancel_download — cancel a job by ID",
-  "agent.prefsNote": "Agent jobs share the same queue and settings: output folder, concurrency and proxy all follow the Settings page.",
+  "agent.prompt": "Download my video via the LumeAny MCP server (http://127.0.0.1:8790/mcp): probe_video to parse, start_download to enqueue, list_jobs for progress.",
   "agent.errorPrefix": "Failed to start: {error}",
 
   "menu.support": "Support",

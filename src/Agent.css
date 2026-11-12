@@ -4,7 +4,11 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding-bottom: 24px;
+  scrollbar-width: none; /* 紧凑排版下正常窗口不溢出；万一溢出滚轮仍可用 */
+}
+
+.agent::-webkit-scrollbar {
+  display: none;
 }
 
 .agent .head {
@@ -21,8 +25,8 @@
   background: var(--surface);
   border: 1px solid var(--hairline);
   border-radius: 10px;
-  padding: 14px 16px;
-  margin-bottom: 12px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
 }
 
 .agent-card.off {
@@ -173,12 +177,13 @@
   background: var(--card-soft);
   border: 1px solid var(--hairline);
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.45;
   overflow-x: auto;
   white-space: pre;
+  scrollbar-width: none;
 }
 
 .agent-cli {
@@ -192,13 +197,14 @@
   min-width: 0;
   overflow-x: auto;
   white-space: nowrap;
+  scrollbar-width: none;
 }
 
 .agent-tools {
-  margin: 8px 0 0;
+  margin: 6px 0 0;
   padding-left: 18px;
   font-size: 12.5px;
-  line-height: 1.9;
+  line-height: 1.6;
   color: var(--ink-soft);
 }
 
@@ -208,11 +214,18 @@
   color: var(--indigo-ink);
 }
 
+/* 提示词行：虚线分隔，mono 提示词 + 复制按钮 */
 .agent-note {
-  margin: 10px 0 0;
-  padding-top: 10px;
+  margin: 8px 0 0;
+  padding-top: 8px;
   border-top: 1px dashed var(--hairline);
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.6;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.agent-note .agent-mono {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.55;
 }
