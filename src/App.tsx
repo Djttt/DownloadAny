@@ -40,6 +40,7 @@ import { restoreUser, type AuthUser } from "./lib/auth";
 import { useAppUpdater } from "./lib/updater";
 import { Icon } from "./components/Icon";
 import { UrlBar } from "./components/UrlBar";
+import { AgentView } from "./components/AgentView";
 import { AuthModal } from "./components/AuthModal";
 import { FormatBar } from "./components/VideoCard";
 import { QueueList } from "./components/QueueList";
@@ -56,7 +57,7 @@ import "./App.css";
 
 const TERMINAL: JobRecord["status"][] = ["completed", "failed", "cancelled"];
 
-type View = "download" | "history";
+type View = "download" | "history" | "agent";
 type Dialog = "feedback" | "settings";
 type ParsedVideo = { key: string; order: number; url: string; info: VideoInfo };
 type AppMessage = { id: number; text: string; type: "success" | "error" | "info" };
@@ -81,6 +82,9 @@ function App() {
   const autoCancelRequested = useRef(false);
   const analyticsJobs = useRef<Record<number, Pick<JobRecord, "url" | "title" | "formatId" | "formatLabel">>>({});
   const trackedTerminalEvents = useRef(new Set<string>());
+  // agent 对等：started 去重 + 无 UI 元数据的 agent 任务延迟水合（500ms 宽限让 invoke 先注册，防双发）
+  const trackedStarted = useRef(new Set<number>());
+  const pendingHydrate = useRef(new Set<number>());
   const historyIds = useRef<Record<number, string>>({});
   const [view, setView] = useState<View>("download");
   const [dialog, setDialog] = useState<Dialog | null>(null);
@@ -173,7 +177,7 @@ function App() {
         }),
       ),
     );
-    reg(onJobStatus((s) => {
+    reg(onJobStatus(async (s) => {
       upsert(s.jobId, { status: s.status, error: s.error, outputPath: s.outputPath });
       const eventType = s.status === "completed"
         ? "download_completed"
@@ -182,7 +186,17 @@ function App() {
           : s.status === "cancelled"
             ? "download_cancelled"
             : null;
-      const job = analyticsJobs.current[s.jobId];
+      let job = analyticsJobs.current[s.jobId];
+      if (!job) {
+        if (TERMINAL.includes(s.status)) {
+          // agent 任务的首个 UI 可见事件可能就是终态：水合补齐元数据并补发 started
+          const hydrated = await hydrateAgentJob(s.jobId);
+          if (hydrated) job = hydrated;
+        } else if (!pendingHydrate.current.has(s.jobId)) {
+          pendingHydrate.current.add(s.jobId);
+          window.setTimeout(() => void hydrateAgentJob(s.jobId), 500);
+        }
+      }
       const eventKey = `${s.jobId}:${s.status}`;
       if (eventType && job && !trackedTerminalEvents.current.has(eventKey)) {
         trackedTerminalEvents.current.add(eventKey);
@@ -200,6 +214,44 @@ function App() {
       unlisten.forEach((f) => f());
     };
   }, []);
+
+  /** started 埋点唯一出口：UI 入队与 agent 水合共用，按 jobId 去重 */
+  function recordJobStart(
+    job: Pick<JobRecord, "id" | "url" | "title" | "formatId" | "formatLabel">,
+    mediaId?: string,
+  ) {
+    if (trackedStarted.current.has(job.id)) return;
+    trackedStarted.current.add(job.id);
+    analyticsJobs.current[job.id] ??= {
+      url: job.url,
+      title: job.title,
+      formatId: job.formatId,
+      formatLabel: job.formatLabel,
+    };
+    void trackAnalyticsEvent("download_started", {
+      mediaId,
+      mediaTitle: job.title,
+      mediaUrl: job.url,
+      formatId: job.formatId,
+      formatLabel: job.formatLabel,
+    });
+  }
+
+  /** agent 任务无 invoke 注册：从 Rust 权威快照回填 UI 元数据并补发 started */
+  async function hydrateAgentJob(id: number): Promise<JobRecord | null> {
+    pendingHydrate.current.delete(id);
+    if (analyticsJobs.current[id]) return null;
+    try {
+      const jobs = await listJobs();
+      const job = jobs.find((j) => j.id === id);
+      if (!job) return null;
+      upsert(id, { url: job.url, title: job.title, formatId: job.formatId, formatLabel: job.formatLabel });
+      recordJobStart(job);
+      return job;
+    } catch {
+      return null;
+    }
+  }
 
   function upsert(id: number, patch: Partial<JobRecord>) {
     setJobs((prev) => {
@@ -320,13 +372,10 @@ function App() {
         formatId: format.id,
         formatLabel: format.label,
       };
-      void trackAnalyticsEvent("download_started", {
+      recordJobStart(
+        { id, url, title: title ?? t("task.fallback", { id }), formatId: format.id, formatLabel: format.label },
         mediaId,
-        mediaTitle: title,
-        mediaUrl: url,
-        formatId: format.id,
-        formatLabel: format.label,
-      });
+      );
       setView("download");
       return id;
     } catch (e) {
@@ -449,6 +498,16 @@ function App() {
             <Icon name="history" size={15} />
             <span>{t("nav.history")}</span>
           </button>
+          <button
+            className={view === "agent" ? "nav on" : "nav"}
+            onClick={(event) => {
+              showNavRipple(event);
+              setView("agent");
+            }}
+          >
+            <Icon name="agent" size={15} />
+            <span>{t("nav.agent")}</span>
+          </button>
         </nav>
         <div className="side-menu">
           <SupportMenuItem />
@@ -465,7 +524,9 @@ function App() {
       </aside>
 
       <main className="main">
-        {view === "download" ? (
+        {view === "agent" ? (
+          <AgentView />
+        ) : view === "download" ? (
           <>
             <header className="head">
               <h1>{t("app.title")}</h1>

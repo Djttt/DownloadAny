@@ -3,6 +3,9 @@ mod commands;
 mod component_updater;
 mod embedded_components;
 mod error;
+mod mcp_prefs;
+mod mcp_server;
+mod mcp_tools;
 mod nettest;
 mod probe;
 mod progress;
@@ -38,6 +41,8 @@ pub fn run() {
             commands::open_download_location,
             commands::dependency_info,
             commands::detect_proxy,
+            mcp_server::set_mcp_enabled,
+            mcp_server::mcp_status,
             commands::google_oauth_login,
             commands::test_site,
             component_updater::update_ytdlp_component

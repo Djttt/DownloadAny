@@ -153,6 +153,15 @@ pub struct DownloadOptions {
     pub proxy: Option<String>,
 }
 
+/// 本次探测的完整元数据：白名单 ids + 展示字段。
+/// MCP 入口没有前端的 probe 态，标题/清晰度标签靠这里回填任务记录。
+#[derive(Debug, Clone)]
+pub struct ProbedInfo {
+    pub valid_ids: HashSet<String>,
+    pub title: String,
+    pub formats: Vec<probe::FormatOption>,
+}
+
 struct JobControl {
     cancelled: AtomicBool,
     pid: AtomicU32,
@@ -163,8 +172,8 @@ struct Inner {
     controls: Mutex<HashMap<u64, Arc<JobControl>>>,
     next_id: AtomicU64,
     gate: Gate,
-    /// url -> 该次探测返回的真实 format_id 集合（入队白名单校验）
-    probed: Mutex<HashMap<String, HashSet<String>>>,
+    /// url -> 该次探测的元数据（白名单校验 + 展示字段回填）
+    probed: Mutex<HashMap<String, ProbedInfo>>,
 }
 
 #[derive(Clone)]
@@ -192,12 +201,17 @@ impl AppState {
             .set_limit(n.clamp(MIN_CONCURRENT, MAX_CONCURRENT_LIMIT));
     }
 
-    pub fn cache_probe_ids(&self, url: &str, ids: HashSet<String>) {
+    pub fn cache_probe(&self, url: &str, info: ProbedInfo) {
         self.inner
             .probed
             .lock()
             .unwrap()
-            .insert(url.to_string(), ids);
+            .insert(url.to_string(), info);
+    }
+
+    /// 该 URL 本会话的探测元数据；未探测过返回 None
+    pub fn probe_meta(&self, url: &str) -> Option<ProbedInfo> {
+        self.inner.probed.lock().unwrap().get(url).cloned()
     }
 
     fn control(&self, id: u64) -> Arc<JobControl> {
@@ -233,10 +247,10 @@ impl AppState {
 
     pub fn validate_format(&self, url: &str, format_id: &str) -> Result<(), AppError> {
         let cache = self.inner.probed.lock().unwrap();
-        let ids = cache
+        let meta = cache
             .get(url)
             .ok_or_else(|| AppError::InvalidFormat("请先解析该链接再下载".into()))?;
-        args::validate_format(format_id, ids)
+        args::validate_format(format_id, &meta.valid_ids)
     }
 }
 
@@ -568,13 +582,45 @@ pub async fn probe_and_cache(
     state: &AppState,
 ) -> Result<probe::VideoInfo, AppError> {
     let result = probe::probe(url, proxy).await?;
-    state.cache_probe_ids(url, result.valid_ids);
-    Ok(result.info)
+    let info = result.info;
+    state.cache_probe(
+        url,
+        ProbedInfo {
+            valid_ids: result.valid_ids,
+            title: info.title.clone(),
+            formats: info.formats.clone(),
+        },
+    );
+    Ok(info)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn probe_meta_roundtrip_and_validate() {
+        let state = AppState::new();
+        let info = ProbedInfo {
+            valid_ids: HashSet::new(),
+            title: "标题".into(),
+            formats: vec![probe::FormatOption {
+                id: crate::args::FMT_BEST.into(),
+                label: "最佳画质".into(),
+                height: None,
+                ext: None,
+                filesize: None,
+            }],
+        };
+        state.cache_probe("https://example.com/v", info);
+        let meta = state.probe_meta("https://example.com/v").expect("cached");
+        assert_eq!(meta.title, "标题");
+        assert_eq!(meta.formats[0].label, "最佳画质");
+        assert!(state.probe_meta("https://other").is_none());
+        assert!(state.validate_format("https://example.com/v", crate::args::FMT_BEST).is_ok());
+        assert!(state.validate_format("https://example.com/v", "whatever").is_err());
+        assert!(state.validate_format("https://not.probed/x", crate::args::FMT_BEST).is_err());
+    }
 
     #[tokio::test]
     async fn gate_blocks_beyond_limit_and_admits_on_release() {

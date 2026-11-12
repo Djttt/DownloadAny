@@ -4,6 +4,7 @@ import type {
   DependencyInfo,
   DownloadOptions,
   JobRecord,
+  McpStatus,
   ProgressEvent,
   ProxyCandidate,
   SiteTestResult,
@@ -32,6 +33,10 @@ export const openDownloadLocation = (filePath: string, fallbackDir: string) =>
   invoke<void>("open_download_location", { filePath, fallbackDir });
 
 export const dependencyInfo = () => invoke<DependencyInfo>("dependency_info");
+
+// Agent 接入（内置 MCP 服务）
+export const mcpStatus = () => invoke<McpStatus>("mcp_status");
+export const setMcpEnabled = (on: boolean) => invoke<McpStatus>("set_mcp_enabled", { on });
 
 export const detectProxy = () => invoke<ProxyCandidate | null>("detect_proxy");
 
