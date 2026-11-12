@@ -114,7 +114,7 @@ export interface LoginCaptcha {
   answer: string;
 }
 
-async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
+export async function apiRequest<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -122,7 +122,7 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
   try {
     response = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: "include" });
   } catch {
-    throw new Error("无法连接登录服务，请检查服务是否已启动");
+    throw new Error("无法连接后端服务，请检查网络或服务状态");
   }
   const body = response.status === 204 ? null : await response.json().catch(() => null);
   if (!response.ok) throw new ApiError(errorMessage(body, `请求失败 (${response.status})`), response.status);
@@ -140,19 +140,19 @@ async function acceptTokens(tokens: TokenResponse): Promise<AuthUser> {
 }
 
 async function meWithToken(token: string): Promise<AuthUser> {
-  return userFromApi(await request<ApiUser>("/api/auth/me", {}, token));
+  return userFromApi(await apiRequest<ApiUser>("/api/auth/me", {}, token));
 }
 
 export async function loginWithPassword(email: string, password: string, captcha?: LoginCaptcha): Promise<AuthUser> {
   try {
-    const tokens = await request<TokenResponse>("/api/auth/login", {
+    const tokens = await apiRequest<TokenResponse>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password, captcha_id: captcha?.id, captcha_answer: captcha?.answer }),
     });
     return acceptTokens(tokens);
   } catch (reason) {
     if (reason instanceof ApiError && reason.status === 428) {
-      const challenge = await request<{ captcha_id: string; question: string }>("/api/auth/captcha");
+      const challenge = await apiRequest<{ captcha_id: string; question: string }>("/api/auth/captcha");
       throw new CaptchaRequiredError(challenge.captcha_id, challenge.question);
     }
     if (reason instanceof ApiError && reason.status === 404) {
@@ -169,7 +169,7 @@ export async function registerWithPassword(
   confirmPassword: string,
 ): Promise<AuthUser> {
   try {
-    const tokens = await request<TokenResponse>("/api/auth/register", {
+    const tokens = await apiRequest<TokenResponse>("/api/auth/register", {
       method: "POST",
       body: JSON.stringify({ email, password, confirm_password: confirmPassword }),
     });
@@ -183,7 +183,7 @@ export async function registerWithPassword(
 }
 
 export async function forgotPassword(email: string): Promise<string> {
-  const result = await request<{ message: string }>("/api/auth/forgot-password", {
+  const result = await apiRequest<{ message: string }>("/api/auth/forgot-password", {
     method: "POST",
     body: JSON.stringify({ email }),
   });
@@ -191,7 +191,7 @@ export async function forgotPassword(email: string): Promise<string> {
 }
 
 export async function resetPasswordByEmailCode(email: string, code: string, newPassword: string): Promise<string> {
-  const result = await request<{ message: string }>("/api/auth/reset-password/code", {
+  const result = await apiRequest<{ message: string }>("/api/auth/reset-password/code", {
     method: "POST",
     body: JSON.stringify({ email, code, new_password: newPassword }),
   });
@@ -203,7 +203,7 @@ export async function loginWithGoogle(authorization: {
   codeVerifier: string;
   redirectUri: string;
 }): Promise<AuthUser> {
-  const tokens = await request<TokenResponse>("/api/auth/google/code", {
+  const tokens = await apiRequest<TokenResponse>("/api/auth/google/code", {
     method: "POST",
     body: JSON.stringify({
       code: authorization.code,
@@ -216,7 +216,7 @@ export async function loginWithGoogle(authorization: {
 
 export async function changePassword(currentPassword: string | null, newPassword: string): Promise<string> {
   if (!session) throw new Error("登录状态已失效，请重新登录");
-  const result = await request<{ message: string }>("/api/auth/change-password", {
+  const result = await apiRequest<{ message: string }>("/api/auth/change-password", {
     method: "POST",
     body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
   }, session.accessToken);
@@ -228,7 +228,7 @@ export async function restoreUser(): Promise<AuthUser | null> {
   try {
     if (session.expiresAt > Date.now() + 30_000) return await meWithToken(session.accessToken);
     if (!session.refreshToken) throw new Error("No refresh token");
-    const tokens = await request<TokenResponse>("/api/auth/refresh", {
+    const tokens = await apiRequest<TokenResponse>("/api/auth/refresh", {
       method: "POST",
       body: JSON.stringify({ refresh_token: session.refreshToken }),
     });
@@ -243,7 +243,7 @@ export async function logout(): Promise<void> {
   const token = session?.accessToken;
   clearSession();
   if (!token) return;
-  await request<{ message: string }>("/api/auth/logout", { method: "POST" }, token).catch(() => {});
+  await apiRequest<{ message: string }>("/api/auth/logout", { method: "POST" }, token).catch(() => {});
 }
 
 export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;

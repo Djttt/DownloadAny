@@ -34,6 +34,7 @@ pub fn run() {
         .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
             commands::probe_video,
+            commands::cache_probe_result,
             commands::enqueue_download,
             commands::cancel_download,
             commands::list_jobs,

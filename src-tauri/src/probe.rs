@@ -1,13 +1,13 @@
 //! 元数据探测：yt-dlp -J（--dump-single-json，默认 simulate 不下载）。
 
 use crate::{error::AppError, resolve};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::process::Stdio;
 use std::time::Duration;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FormatOption {
     pub id: String,
@@ -17,7 +17,7 @@ pub struct FormatOption {
     pub filesize: Option<u64>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VideoInfo {
     pub id: String,

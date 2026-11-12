@@ -19,6 +19,10 @@ export type { UnlistenFn };
 export const probeVideo = (url: string, proxy: string | null) =>
   invoke<VideoInfo>("probe_video", { url, proxy });
 
+/** 把后端解析出的安全格式登记到本地队列，供 yt-dlp 下载前做白名单校验。 */
+export const cacheProbeResult = (url: string, info: VideoInfo) =>
+  invoke<void>("cache_probe_result", { url, info });
+
 export const enqueueDownload = (options: DownloadOptions) =>
   invoke<number>("enqueue_download", { options });
 

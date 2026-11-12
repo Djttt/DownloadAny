@@ -7,6 +7,7 @@ use crate::probe::VideoInfo;
 use crate::queue::{self, AppState, DownloadOptions, JobRecord};
 use crate::resolve;
 use serde::Serialize;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
@@ -22,6 +23,34 @@ pub async fn probe_video(
     args::validate_url(&url)?;
     let proxy = args::validate_proxy(proxy.as_deref())?;
     queue::probe_and_cache(&url, proxy.as_deref(), &state).await
+}
+
+/// 登记后端解析结果，让本地下载队列继续执行“先解析、后下载”的格式白名单校验。
+/// WebView 只能登记应用自有的格式哨兵，不能借此注入任意 yt-dlp format selector。
+#[tauri::command]
+pub fn cache_probe_result(
+    state: State<'_, AppState>,
+    url: String,
+    info: VideoInfo,
+) -> Result<(), AppError> {
+    let url = url.trim().to_string();
+    args::validate_url(&url)?;
+    if info.formats.is_empty() || info.formats.len() > 50 {
+        return Err(AppError::InvalidFormat("后端返回的格式列表无效".into()));
+    }
+    let no_raw_format_ids = HashSet::new();
+    for format in &info.formats {
+        args::validate_format(&format.id, &no_raw_format_ids)?;
+    }
+    state.cache_probe(
+        &url,
+        queue::ProbedInfo {
+            valid_ids: no_raw_format_ids,
+            title: info.title,
+            formats: info.formats,
+        },
+    );
+    Ok(())
 }
 
 #[tauri::command]

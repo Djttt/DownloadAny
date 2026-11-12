@@ -3,15 +3,16 @@ import { open } from "@tauri-apps/plugin-dialog";
 import type { FormatOption, JobRecord, VideoInfo } from "./types";
 import {
   cancelDownload,
+  cacheProbeResult,
   enqueueDownload,
   listJobs,
   onJobProgress,
   onJobStatus,
-  probeVideo,
   setMaxConcurrency,
   updateYtdlpComponent,
   type UnlistenFn,
 } from "./lib/tauri";
+import { parseVideo } from "./lib/media";
 import {
   CONCURRENCY_DEFAULT,
   CONCURRENCY_MAX,
@@ -75,7 +76,7 @@ function App() {
   const [maxConcurrency, setMaxConcurrencyState] = useState(CONCURRENCY_DEFAULT);
   const [proxyType, setProxyTypeState] = useState<ProxyType>("none");
   const [proxyAddr, setProxyAddrState] = useState("");
-  // 组装一次、两处消费：probeVideo 与 enqueueDownload 都带上，探测/下载走同一代理
+  // 代理只交给本地 yt-dlp 下载；元数据解析由后端按服务端网络配置执行。
   const proxyUrl = buildProxyUrl(proxyType, proxyAddr);
   const [autoJobIds, setAutoJobIds] = useState<number[]>([]);
   const [autoCancelling, setAutoCancelling] = useState(false);
@@ -309,7 +310,8 @@ function App() {
           if (!url) break;
           void trackAnalyticsEvent("parse_requested", { mediaUrl: url });
           try {
-            const info = await probeVideo(url, proxyUrl);
+            const info = await parseVideo(url);
+            await cacheProbeResult(url, info);
             void trackAnalyticsEvent("parse_succeeded", {
               mediaId: info.id,
               mediaTitle: info.title,
@@ -396,7 +398,7 @@ function App() {
     saveAutoMode(v).catch(console.error);
   }
 
-  /** 代理偏好：状态 → 持久化；下次解析/下载即生效（invoke 时现取 proxyUrl） */
+  /** 代理偏好：状态 → 持久化；下次本地下载即生效（invoke 时现取 proxyUrl） */
   function applyProxy(type: ProxyType, addr: string) {
     setProxyTypeState(type);
     setProxyAddrState(addr);
