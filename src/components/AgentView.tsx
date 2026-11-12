@@ -115,14 +115,9 @@ export function AgentView() {
 
       <section className={`agent-card${running ? "" : " off"}`}>
         <div className="agent-label">{t("agent.examplesTitle")}</div>
-        <ul className="agent-tools">
-          <li>{t("agent.toolProbe")}</li>
-          <li>{t("agent.toolDownload")}</li>
-          <li>{t("agent.toolList")}</li>
-          <li>{t("agent.toolCancel")}</li>
-        </ul>
+        <p className="agent-hint">{t("agent.features")}</p>
         <div className="agent-note">
-          <code className="agent-mono">{t("agent.prompt")}</code>
+          <span className="agent-prompt">{t("agent.prompt")}</span>
           <CopyButton text={t("agent.prompt")} />
         </div>
       </section>
