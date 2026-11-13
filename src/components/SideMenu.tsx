@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { getVersion } from "@tauri-apps/api/app";
-import { dependencyInfo, detectProxy, testSite } from "../lib/tauri";
-import type { DependencyInfo } from "../types";
+import { detectProxy, testSite } from "../lib/tauri";
 import {
   CONCURRENCY_MAX,
   CONCURRENCY_MIN,
@@ -23,11 +21,9 @@ import { Icon } from "./Icon";
  * 侧栏功能菜单:联系客服(悬停飞窗)/ 问题反馈(弹窗)/ 设置(弹窗)
  * ==================================================================== */
 
-// TODO: 支持渠道占位值,上线前替换为真实的 Telegram/Discord 邀请链接、客服邮箱与 QQ 群号
-const TELEGRAM_URL = "https://t.me/your-community";
-const DISCORD_URL = "https://discord.gg/your-community";
-const SUPPORT_EMAIL = "support@example.com";
-const QQ_GROUP = "100000000";
+// 客服渠道:邮箱与 QQ 群(点击复制到剪贴板)
+const SUPPORT_EMAIL = "2377176572@qq.com";
+const QQ_GROUP = "374519883";
 
 /* ---- 小图标(线性风格,继承 currentColor) ---- */
 
@@ -159,14 +155,6 @@ export function SupportMenuItem() {
       </button>
       {open && (
         <div className="flyout" role="menu">
-          <button className="fly-row" type="button" role="menuitem" onClick={() => openUrl(TELEGRAM_URL).catch(() => {})}>
-            {I.telegram}
-            <strong>{t("fly.telegram")}</strong>
-          </button>
-          <button className="fly-row" type="button" role="menuitem" onClick={() => openUrl(DISCORD_URL).catch(() => {})}>
-            {I.discord}
-            <strong>{t("fly.discord")}</strong>
-          </button>
           <button className="fly-row" type="button" role="menuitem" onClick={() => handleCopy("email", SUPPORT_EMAIL)}>
             {I.mail}
             <span className="fly-copy">
@@ -584,7 +572,7 @@ export function FeedbackModal({ onClose }: { onClose: () => void }) {
 /* ---- 设置(常规 / 网络 / 关于) ---- */
 
 // TODO: 官网占位,替换为真实站点地址
-const WEBSITE_URL = "https://example.com";
+const WEBSITE_URL = "https://www.lumeany.cc";
 
 type SettingsTab = "general" | "network" | "about";
 
@@ -970,16 +958,12 @@ function UpdateActions({ updater, compact = false }: { updater: AppUpdater; comp
 
 function AboutPane({ updater }: { updater: AppUpdater }) {
   const [appVersion, setAppVersion] = useState<string | null>(null);
-  const [dep, setDep] = useState<DependencyInfo | null>(null);
 
   useEffect(() => {
     let alive = true;
     getVersion()
       .then((v) => alive && setAppVersion(v))
       .catch(() => {});
-    dependencyInfo()
-      .then((d) => alive && setDep(d))
-      .catch(() => {}); // PyInstaller 静态包首探可能较慢,失败时留空
     return () => {
       alive = false;
     };
@@ -987,7 +971,6 @@ function AboutPane({ updater }: { updater: AppUpdater }) {
 
   const rows: [string, string][] = [
     [t("about.version"), appVersion ? `v${appVersion}` : "—"],
-    [t("about.components"), dep ? `${dep.ytDlpVersion ?? "?"} / ${dep.ffmpegVersion ?? "?"}` : "—"],
     [t("about.website"), WEBSITE_URL],
   ];
 
@@ -1010,7 +993,6 @@ function AboutPane({ updater }: { updater: AppUpdater }) {
           <span className="v">{v}</span>
         </div>
       ))}
-      <p className="setting-note">{t("about.componentsNote")}</p>
       {!noticeShown && (
         <div className="about-update">
           <div>
