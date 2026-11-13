@@ -14,7 +14,8 @@
 # 前置：GitHub Variable DOWNLOADANY_API_BASE_URL 已设；目标 tag 的 CI 已绿。
 # 未覆盖：yt-dlp 组件发布（另走 /admin/components，先 tauri signer sign 原始二进制）。
 # 覆盖用环境变量：SERVER=ubuntu@www.lumeany.cc API=https://api.lumeany.cc \
-#                  REMOTE_ROOT=/srv/downloadany REPO=Djttt/DownloadAny GH_TOKEN=…（API 限流时）
+#                  REMOTE_ROOT=/srv/downloadany REPO=Djttt/DownloadAny \
+#                  GH_TOKEN=…（私有仓库【必需】且可免限流；fine-grained 只给 Contents:read 即可）
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -42,29 +43,29 @@ auth=()
 echo "== [1/4] 解析并下载 Release $TAG 的 updater 产物 =="
 release_json="$(curl -fsSL "${auth[@]}" "https://api.github.com/repos/$REPO/releases/tags/$TAG")"
 # 命令赋值参与 set -e：选集不精确（少/多任一必需产物）直接失败并列出实际资产
-names_raw="$(python3 -c "
+names_raw="$(python3 - "$release_json" <<'PY'
 import json, sys
-assets = [a['name'] for a in json.loads(sys.argv[1]).get('assets', [])]
+assets = json.loads(sys.argv[1]).get("assets", [])
 def one(pred, label):
-    hits = [n for n in assets if pred(n)]
+    hits = [a for a in assets if pred(a)]
     if len(hits) != 1:
-        sys.exit(f'{label}: 期望 1 个、实际 {len(hits)} 个 {hits}；release 资产: {assets}')
+        sys.exit(f"{label}: 期望 1 个、实际 {len(hits)}；release 资产: {[a['name'] for a in assets]}")
     return hits[0]
-win_exe = one(lambda n: n.lower().endswith('-setup.exe'), 'windows exe')
-mac_tgz = one(lambda n: n.endswith('.app.tar.gz'), 'macos tar.gz')
-for need in (win_exe + '.sig', mac_tgz + '.sig'):
-    if need not in assets:
-        sys.exit(f'缺少 {need}；release 资产: {assets}')
-print('\n'.join([win_exe, win_exe + '.sig', mac_tgz, mac_tgz + '.sig']))
-" "$release_json")"
-mapfile -t names <<<"$names_raw"
+win = one(lambda a: a["name"].lower().endswith("-setup.exe"), "windows exe")
+mac = one(lambda a: a["name"].endswith(".app.tar.gz"), "macos tar.gz")
+sig = lambda base: one(lambda a, b=base: a["name"] == b + ".sig", f"{base} sig")
+for a in (win, sig(win["name"]), mac, sig(mac["name"])):
+    print(f"{a['name']}\t{a['url']}")
+PY
+)"
+names=(); while IFS=$'\t' read -r n u; do names+=("$n"); done <<<"$names_raw"
 printf '  %s\n' "${names[@]}"
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
-for n in "${names[@]}"; do
-  echo "  下载 $n"
-  curl -fsSL -o "$tmp/$n" "https://github.com/$REPO/releases/download/$TAG/$n"
-done
+echo "  下载（API 资产端点，私有仓库带 GH_TOKEN 同样可用）"
+while IFS=$'\t' read -r n u; do
+  curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" -o "$tmp/$n" "$u"
+done <<<"$names_raw"
 
 echo "== [2/4] 上传到 $SERVER 并落位 $REMOTE_ROOT/desktop/$VER/ =="
 ssh -o BatchMode=yes "$SERVER" "rm -rf /tmp/da-publish && mkdir -p /tmp/da-publish $REMOTE_ROOT/desktop/$VER"
