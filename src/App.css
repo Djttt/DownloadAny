@@ -1445,8 +1445,8 @@ select:focus-visible {
   padding: 9px 16px;
   border-bottom: 1px solid var(--hairline);
   color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 0.06em;
+  font-size: 14px;
+  letter-spacing: 0;
 }
 
 .row {
@@ -1570,7 +1570,7 @@ select:focus-visible {
 
 .c-act {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 2px;
 }
 
@@ -2031,85 +2031,77 @@ select:focus-visible {
   line-height: 1.6;
 }
 
-.radio-cards {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+/* 问题反馈:胶囊分段 + 带计数器的描述框 + 右对齐提交 */
+.fb-seg {
+  display: inline-flex;
+  gap: 8px;
   margin-bottom: 18px;
 }
 
-.radio-card {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  padding: 13px 14px;
+.fb-seg button {
+  padding: 7px 18px;
+  border-radius: 999px;
   border: 1.5px solid var(--hairline);
-  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 13px;
   cursor: pointer;
-  transition: border-color 0.18s ease, background-color 0.18s ease;
+  transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease;
 }
 
-.radio-card:hover {
+.fb-seg button:hover {
   border-color: var(--indigo-line);
 }
 
-.radio-card.on {
+.fb-seg button.on {
   border-color: var(--indigo);
   background: var(--mist);
-}
-
-.radio-card input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.radio-dot {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  margin-top: 2px;
-  border-radius: 50%;
-  border: 1.5px solid var(--line-strong);
-  background: var(--surface);
-  display: grid;
-  place-items: center;
-  transition: border-color 0.18s ease;
-}
-
-.radio-card.on .radio-dot {
-  border-color: var(--indigo);
-}
-
-.radio-dot::after {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--indigo);
-  transform: scale(0);
-  transition: transform 0.15s ease;
-}
-
-.radio-card.on .radio-dot::after {
-  transform: scale(1);
-}
-
-.radio-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.radio-text strong {
-  font-size: 13.5px;
+  color: var(--indigo-ink);
   font-weight: 600;
 }
 
-.radio-text small {
-  color: var(--muted);
+.fb-seg button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.fb-field {
+  position: relative;
+}
+
+.fb-counter {
+  position: absolute;
+  right: 12px;
+  bottom: 9px;
   font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.fb-counter.max {
+  color: var(--red);
+}
+
+.fb-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.fb-error {
+  margin: 0;
+  flex: 1;
+  color: var(--red);
+  font-size: 12.5px;
+}
+
+.fb-actions .primary {
+  width: auto;
+  min-width: 108px;
+  margin-left: auto;
+  padding: 10px 26px;
 }
 
 .modal-body h4 {

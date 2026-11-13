@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { createPortal } from "react-dom";
 import { getVersion } from "@tauri-apps/api/app";
 import { detectProxy, testSite } from "../lib/tauri";
+import { FEEDBACK_MAX_LENGTH, FeedbackError, submitFeedback } from "../lib/feedback";
 import {
   CONCURRENCY_MAX,
   CONCURRENCY_MIN,
@@ -493,20 +494,28 @@ export function FeedbackModal({ onClose }: { onClose: () => void }) {
   const [kind, setKind] = useState<"bug" | "feature">("bug");
   const [text, setText] = useState("");
   const [invalid, setInvalid] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [phase, setPhase] = useState<"form" | "sending" | "done">("form");
+  const [error, setError] = useState<"network" | "rate" | null>(null);
 
-  // 纯前端占位:提交仅展示成功态,数据暂不上报
-  function submit() {
+  async function submit() {
     if (!text.trim()) {
       setInvalid(true);
       return;
     }
-    setSubmitted(true);
+    setPhase("sending");
+    setError(null);
+    try {
+      await submitFeedback(kind, text.trim());
+      setPhase("done");
+    } catch (err) {
+      setPhase("form");
+      setError(err instanceof FeedbackError && err.status === 429 ? "rate" : "network");
+    }
   }
 
   return (
     <Modal label={t("fb.title")} onClose={onClose} wide>
-      {submitted ? (
+      {phase === "done" ? (
         <div className="feedback-done">
           <svg viewBox="0 0 48 48" width="52" height="52" fill="none" aria-hidden>
             <circle cx="24" cy="24" r="22" fill="var(--mist)" />
@@ -528,40 +537,53 @@ export function FeedbackModal({ onClose }: { onClose: () => void }) {
           </header>
           <div className="modal-body">
             <p className="modal-intro">{t("fb.intro")}</p>
-            <div className="radio-cards">
-              <label className={kind === "bug" ? "radio-card on" : "radio-card"}>
-                <input type="radio" name="feedback-kind" checked={kind === "bug"} onChange={() => setKind("bug")} />
-                <span className="radio-dot" aria-hidden />
-                <span className="radio-text">
-                  <strong>{t("fb.bugTitle")}</strong>
-                  <small>{t("fb.bugDesc")}</small>
-                </span>
-              </label>
-              <label className={kind === "feature" ? "radio-card on" : "radio-card"}>
-                <input type="radio" name="feedback-kind" checked={kind === "feature"} onChange={() => setKind("feature")} />
-                <span className="radio-dot" aria-hidden />
-                <span className="radio-text">
-                  <strong>{t("fb.featureTitle")}</strong>
-                  <small>{t("fb.featureDesc")}</small>
-                </span>
-              </label>
+            <div className="fb-seg" role="radiogroup" aria-label={t("fb.descLabel")}>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={kind === "bug"}
+                className={kind === "bug" ? "on" : ""}
+                disabled={phase === "sending"}
+                onClick={() => setKind("bug")}
+              >
+                {t("fb.bugTitle")}
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={kind === "feature"}
+                className={kind === "feature" ? "on" : ""}
+                disabled={phase === "sending"}
+                onClick={() => setKind("feature")}
+              >
+                {t("fb.featureTitle")}
+              </button>
             </div>
             <h4>{t("fb.descLabel")}</h4>
-            <textarea
-              className={invalid ? "desc invalid" : "desc"}
-              rows={6}
-              value={text}
-              placeholder={t("fb.descPlaceholder")}
-              onChange={(e) => {
-                setText(e.target.value);
-                if (invalid) setInvalid(false);
-              }}
-            />
+            <div className="fb-field">
+              <textarea
+                className={invalid ? "desc invalid" : "desc"}
+                rows={6}
+                maxLength={FEEDBACK_MAX_LENGTH}
+                value={text}
+                disabled={phase === "sending"}
+                placeholder={t("fb.descPlaceholder")}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  if (invalid) setInvalid(false);
+                }}
+              />
+              <span className={text.length >= FEEDBACK_MAX_LENGTH ? "fb-counter max" : "fb-counter"}>
+                {text.length}/{FEEDBACK_MAX_LENGTH}
+              </span>
+            </div>
             {invalid && <p className="desc-error">{t("fb.descRequired")}</p>}
-            <p className="desc-hint">{t("fb.descHint")}</p>
-            <button className="primary" type="button" onClick={submit}>
-              {t("fb.submit")}
-            </button>
+            <div className="fb-actions">
+              {error && <p className="fb-error">{t(error === "rate" ? "fb.rateLimited" : "fb.error")}</p>}
+              <button className="primary" type="button" onClick={submit} disabled={phase === "sending"}>
+                {phase === "sending" ? t("fb.submitting") : t("fb.submit")}
+              </button>
+            </div>
           </div>
         </>
       )}
@@ -571,7 +593,6 @@ export function FeedbackModal({ onClose }: { onClose: () => void }) {
 
 /* ---- 设置(常规 / 网络 / 关于) ---- */
 
-// TODO: 官网占位,替换为真实站点地址
 const WEBSITE_URL = "https://www.lumeany.cc";
 
 type SettingsTab = "general" | "network" | "about";
