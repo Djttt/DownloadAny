@@ -414,13 +414,16 @@ async fn run_job(app: AppHandle, state: AppState, id: u64, opts: DownloadOptions
     let yt_dlp = resolve::yt_dlp();
     let ffmpeg = resolve::ffmpeg();
     let ffmpeg_loc = ffmpeg.ffmpeg_location();
-    let cmd_args = args::build_download_args(
+    let mut cmd_args = args::build_download_args(
         &opts.format_id,
         &opts.url,
         &opts.output_dir,
         ffmpeg_loc.as_deref(),
         proxy.as_deref(),
     );
+    if let Ok(plugin_dir) = crate::embedded_components::ensure_ytdlp_plugins() {
+        args::add_plugin_dir(&mut cmd_args, &plugin_dir);
+    }
 
     let mut cmd = yt_dlp.command();
     cmd.args(&cmd_args)

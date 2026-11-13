@@ -17,6 +17,32 @@ use std::{
 const MANIFEST_JSON: &str = include_str!("../embedded/manifest.json");
 const YT_DLP_GZ: &[u8] = include_bytes!("../embedded/yt-dlp.gz");
 const FFMPEG_GZ: &[u8] = include_bytes!("../embedded/ffmpeg.gz");
+const DOUYIN_PLUGIN: &str =
+    include_str!("../yt-dlp-plugins/yt_dlp_plugins/extractor/douyin_community.py");
+
+/// 释放抖音专用的 yt-dlp 插件，并返回 `--plugin-dirs` 所需的根目录。
+///
+/// 插件只覆盖 DouyinIE；其他站点仍由内嵌的稳定版 yt-dlp 处理。
+pub fn ensure_ytdlp_plugins() -> Result<PathBuf, String> {
+    let root = data_root()?.join("LumeAny").join("plugins");
+    let extractor_dir = root
+        .join("douyin-pr-17826")
+        .join("yt_dlp_plugins")
+        .join("extractor");
+    let target = extractor_dir.join("douyin_community.py");
+    fs::create_dir_all(&extractor_dir).map_err(|e| format!("创建 yt-dlp 插件目录失败: {e}"))?;
+
+    let current = fs::read_to_string(&target).ok();
+    if current.as_deref() != Some(DOUYIN_PLUGIN) {
+        let temp = extractor_dir.join(".douyin_community.py.installing");
+        fs::write(&temp, DOUYIN_PLUGIN).map_err(|e| format!("写入 yt-dlp 插件失败: {e}"))?;
+        if target.exists() {
+            fs::remove_file(&target).map_err(|e| format!("替换 yt-dlp 插件失败: {e}"))?;
+        }
+        fs::rename(&temp, &target).map_err(|e| format!("启用 yt-dlp 插件失败: {e}"))?;
+    }
+    Ok(root)
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
