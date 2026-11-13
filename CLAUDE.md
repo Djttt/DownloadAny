@@ -66,8 +66,8 @@ Rust 侧（`src-tauri/src/`，一模块一职责）：
 ## 约定与陷阱
 
 - **updater 私钥 `.tauri/downloadany.key`（gitignore）必须离线备份，丢失 = 老客户端永远验不过后续更新**；同 key 公钥写了两处——`tauri.conf.json` plugins.updater.pubkey 与 `component_updater.rs` 硬编码，轮换必须两处同步
-- 发布动线：`pnpm version:set` → commit → 打 tag（与 tauri.conf.json 版本严格一致）→ Actions（`.github/workflows/release.yml`）**串行**构建 Windows（NSIS）+ macOS（app/dmg，仅 Apple Silicon），签名后发同一 Release 并合并写 latest.json（串行是防 platforms 键读-改-写覆盖；详见 `docs/UPDATER.md`）；灰度/停用走后端 admin 接口（`docs/PHASE2_UPDATES.md`）
-- 更新端点分两层：dev 构建指 GitHub `latest.json`；发布构建由 `write-update-config.mjs` 用 CI Variable `DOWNLOADANY_API_BASE_URL` 生成 `tauri.release.conf.json` 走自有后端。**`DOWNLOADANY_API_BASE_URL` 是 Rust 编译期环境变量，与前端联调用的 `VITE_API_BASE_URL`（运行时、可走 ssh -L 隧道）是两回事，勿混用**；前者未配置 ⇒ 组件热更新静默禁用
+- 发布动线：`pnpm version:set` → commit → 打 tag（与 tauri.conf.json 版本严格一致）→ Actions（`.github/workflows/release.yml`）**串行**构建 Windows（NSIS）+ macOS（app/dmg，仅 Apple Silicon），签名后发同一 Release 并合并写 latest.json（串行是防 platforms 键读-改-写覆盖；详见 `docs/UPDATER.md`）→ CI 绿后跑 `scripts/publish-server-release.sh <ver>` 把桌面更新登记到自托管服务器（下载签名四件套→上传 `/srv/downloadany/desktop/<ver>/`→服务器侧 admin 登记 windows+macos 两条并回查验收）；灰度/停用走后端 admin 接口（`docs/PHASE2_UPDATES.md`）
+- 更新端点分两层：dev 构建指 GitHub `latest.json`；发布构建由 `write-update-config.mjs` 用 CI Variable `DOWNLOADANY_API_BASE_URL` 生成 `tauri.release.conf.json` 走自有后端。**`DOWNLOADANY_API_BASE_URL` 是 Rust 编译期环境变量，与前端联调用的 `VITE_API_BASE_URL`（运行时、可走 ssh -L 隧道）是两回事，勿混用**。该 Variable 已设为 `https://api.lumeany.cc` ⇒ **下一个 tag 起的发布构建只查自有后端，每次发版必须跑 `publish-server-release.sh` 登记，否则新客户端静默视为"已最新"**（GitHub `latest.json` 仍由 CI 维护，0.1.1 及更早发布构建照常经 GitHub 收升级）；Variable 未配置时 ⇒ 回 GitHub 通道且组件热更新静默禁用
 - 组件热更新只覆盖 yt-dlp（ffmpeg 无远程通道）；旧版本目录保留、可删 `active.json` 回退内嵌版。更新下载都发生在 Rust/插件侧（reqwest），不受 webview CSP 约束，`connect-src` 无需为更新域名放行
 - 修改任何传给 yt-dlp 的参数：过 `args.rs` 白名单，不在别处拼命令
 - MCP 的格式白名单在 `mcp_tools.rs`（窄：仅本次 probe 可见项+两哨兵，挡字幕/封面/m4a/裸高度等 sidecar 形态）；`args.rs` 宽校验仍是下载命令的唯一边界，MCP 不绕过它、只在其上再收窄

@@ -27,9 +27,35 @@ Tag 必须与 `tauri.conf.json` 中的版本完全一致。GitHub Actions（`.gi
 签名 updater 产物、创建 Release，并把两个平台的条目合并进同一份 `latest.json`
 （`windows-x86_64` / `darwin-aarch64`）。串行是刻意的：tauri-action 的 latest.json
 是"拉取旧文件→合并 platforms→删重传"的读-改-写，两个 job 并发会互相覆盖平台键。
-客户端启动 5 秒后自动检查（发现新版本弹右下角浮动提示；设置里的手动「检查更新」不弹浮层，只在关于页内展示结果）：
+客户端启动 5 秒后自动检查（发现新版本弹右下角浮动提示；设置里的手动「检查更新」不弹浮层，只在关于页内展示结果）。
+查询端点分两层：
 
-`https://github.com/Djttt/DownloadAny/releases/latest/download/latest.json`
+- dev 构建与 0.1.1 及更早的发布构建：GitHub `latest.json`
+  `https://github.com/Djttt/DownloadAny/releases/latest/download/latest.json`
+- 之后的发布构建（CI Variable `DOWNLOADANY_API_BASE_URL=https://api.lumeany.cc` 生效）：自托管后端
+  `https://api.lumeany.cc/api/updates/desktop/{{target}}/{{arch}}/{{current_version}}`
+
+> 端点是**整体替换**而非追加：新构建不再查 GitHub。因此每次发版必须完成下面的
+> 「服务器登记」，否则新客户端会静默显示「已是最新」。
+
+## 服务器登记（每次发版必做）
+
+CI 构建成功、Release 产物齐备后，在本地仓库根执行：
+
+```bash
+./scripts/publish-server-release.sh 0.1.2 --notes "本版本更新说明"   # 版本号缺省时取 tauri.conf.json
+# 可选：--rollout 30 灰度起步；--min-version 0.1.0 强制低版本直收
+```
+
+脚本依次：从 GitHub Release 下载 updater 四件套（NSIS exe / app.tar.gz 及各自 `.sig`）→
+上传到服务器 `/srv/downloadany/desktop/<ver>/`（Caddy `/downloadany/*` 静态路由即产物直链根）→
+在服务器侧读 `.env` 的 `UPDATE_ADMIN_TOKEN` 调 admin 接口登记 `windows` 与 `macos` 两条
+（token 与签名原文不出服务器）→ 回查两个端点期望 200。
+
+灰度调整 `PATCH https://api.lumeany.cc/api/updates/admin/desktop/<id>`（`{"rollout_percent":N}`），
+急停 `DELETE` 同路径。yt-dlp 组件发布不在脚本内：`pnpm tauri signer sign` 签名原始二进制、
+算 SHA-256，传 `/srv/downloadany/components/...` 后 POST `/api/updates/admin/components`
+（见 `docs/PHASE2_UPDATES.md` §3）。
 
 ## macOS 通道说明
 
