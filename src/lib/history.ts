@@ -24,6 +24,16 @@ function isStoredJob(value: unknown): value is JobRecord {
   );
 }
 
+export function removeDownloadHistory(historyId: string): Promise<void> {
+  writeQueue = writeQueue.then(async () => {
+    const store = await historyStore();
+    const values = await store.get<unknown[]>(HISTORY_KEY);
+    const current = Array.isArray(values) ? values.filter(isStoredJob) : [];
+    await store.set(HISTORY_KEY, current.filter((item) => item.historyId !== historyId));
+  });
+  return writeQueue;
+}
+
 export async function loadDownloadHistory(): Promise<JobRecord[]> {
   const values = await (await historyStore()).get<unknown[]>(HISTORY_KEY);
   if (!Array.isArray(values)) return [];

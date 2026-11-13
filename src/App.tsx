@@ -36,7 +36,7 @@ import {
 import { setLangPref, t, useLang } from "./lib/i18n";
 import { setThemePref } from "./lib/theme";
 import { analyticsContext, trackAnalyticsEvent } from "./lib/analytics";
-import { loadDownloadHistory, saveDownloadHistory } from "./lib/history";
+import { loadDownloadHistory, removeDownloadHistory, saveDownloadHistory } from "./lib/history";
 import { restoreUser, type AuthUser } from "./lib/auth";
 import { useAppUpdater } from "./lib/updater";
 import { Icon } from "./components/Icon";
@@ -130,11 +130,7 @@ function App() {
   useEffect(() => {
     (async () => {
       try {
-        const existing = await listJobs();
-        if (existing.length) {
-          setJobs(Object.fromEntries(existing.map((j) => [j.id, j])));
-          analyticsJobs.current = Object.fromEntries(existing.map((job) => [job.id, job]));
-        }
+        const existingJobs = await listJobs();
         const [dir, auto, conc, lang, pType, pAddr, theme, history] = await Promise.all([
           loadOutputDir(),
           loadAutoMode(),
@@ -153,6 +149,20 @@ function App() {
         setProxyTypeState(pType);
         setProxyAddrState(pAddr);
         setHistoryJobs(history);
+        if (existingJobs.length) {
+          // 把 list_jobs 回填的任务与历史记录按 id+url 对齐，补上 historyId（供去重与删除用）。
+          const byKey = new Map(history.map((h) => [`${h.id}|${h.url}`, h]));
+          const existing = existingJobs.map((j) => {
+            const h = byKey.get(`${j.id}|${j.url}`);
+            if (h?.historyId) {
+              historyIds.current[j.id] = h.historyId;
+              return { ...j, historyId: h.historyId, savedAt: h.savedAt };
+            }
+            return j;
+          });
+          setJobs(Object.fromEntries(existing.map((j) => [j.id, j])));
+          analyticsJobs.current = Object.fromEntries(existing.map((job) => [job.id, job]));
+        }
         await setMaxConcurrency(conc); // 把持久化的偏好推给 Rust 队列
         void trackAnalyticsEvent("app_open");
       } catch (e) {
@@ -273,8 +283,8 @@ function App() {
         const historyId = historyIds.current[id] ?? crypto.randomUUID();
         const savedAt = Date.now();
         historyIds.current[id] = historyId;
-        next = { ...next, savedAt };
-        void saveDownloadHistory({ ...next, historyId }).catch(console.error);
+        next = { ...next, savedAt, historyId };
+        void saveDownloadHistory(next).catch(console.error);
       }
       return { ...prev, [id]: next };
     });
@@ -442,7 +452,11 @@ function App() {
     window.setTimeout(remove, 650);
   }
 
-  const all = [...Object.values(jobs), ...historyJobs].sort(
+  // 同一任务终态后既在内存 jobs 里也在 historyJobs 里，按 historyId 去重，以内存态为准。
+  const liveHistoryIds = new Set(
+    Object.values(jobs).map((j) => j.historyId).filter((x): x is string => Boolean(x)),
+  );
+  const all = [...Object.values(jobs), ...historyJobs.filter((j) => !j.historyId || !liveHistoryIds.has(j.historyId))].sort(
     (a, b) => (b.savedAt ?? b.id) - (a.savedAt ?? a.id),
   );
   const visible = view === "history" ? all.filter((j) => TERMINAL.includes(j.status)) : all;
@@ -581,7 +595,7 @@ function App() {
 
         {view === "history" && (
           <section className="list" aria-label={t("app.listAriaHistory")}>
-            <QueueList jobs={visible} outputDir={outputDir} onCancel={cancel} />
+            <QueueList jobs={visible} outputDir={outputDir} onCancel={cancel} onDelete={deleteHistoryJob} />
           </section>
         )}
 
@@ -625,6 +639,24 @@ function App() {
 
   function cancel(id: number) {
     cancelDownload(id).catch((e) => setError(String(e)));
+  }
+
+  /** 删除一条历史记录：清掉持久化条目，并让内存态（jobs / historyJobs）同步消失。 */
+  function deleteHistoryJob(job: JobRecord) {
+    const hid = job.historyId;
+    if (!hid) return;
+    setHistoryJobs((prev) => prev.filter((j) => j.historyId !== hid));
+    setJobs((prev) => {
+      const next = { ...prev };
+      for (const [id, mapped] of Object.entries(historyIds.current)) {
+        if (mapped === hid) delete next[Number(id)];
+      }
+      return next;
+    });
+    for (const [id, mapped] of Object.entries(historyIds.current)) {
+      if (mapped === hid) delete historyIds.current[Number(id)];
+    }
+    void removeDownloadHistory(hid).catch(console.error);
   }
 }
 

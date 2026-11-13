@@ -16,10 +16,11 @@ interface Props {
   jobs: JobRecord[];
   outputDir: string;
   onCancel: (id: number) => void;
+  onDelete: (job: JobRecord) => void;
 }
 
 /** 队列列表：标题+状态子行 / 类型 / 进度 / 动作 */
-export function QueueList({ jobs, outputDir, onCancel }: Props) {
+export function QueueList({ jobs, outputDir, onCancel, onDelete }: Props) {
   if (jobs.length === 0) {
     return <div className="empty">{t("queue.empty")}</div>;
   }
@@ -32,7 +33,7 @@ export function QueueList({ jobs, outputDir, onCancel }: Props) {
         <span className="c-act">{t("queue.colAct")}</span>
       </div>
       {jobs.map((job) => (
-        <JobRow key={job.historyId ?? job.id} job={job} outputDir={outputDir} onCancel={onCancel} />
+        <JobRow key={job.historyId ?? job.id} job={job} outputDir={outputDir} onCancel={onCancel} onDelete={onDelete} />
       ))}
     </div>
   );
@@ -42,14 +43,16 @@ function JobRow({
   job,
   outputDir,
   onCancel,
+  onDelete,
 }: {
   job: JobRecord;
   outputDir: string;
   onCancel: (id: number) => void;
+  onDelete: (job: JobRecord) => void;
 }) {
   const active = job.status === "running" || job.status === "queued";
 
-  // 状态子行：这张表的签名细节——一行里同时讲完"是什么阶段、到什么程度"
+  // 状态子行：只讲"到什么程度/为什么失败"；历史记录不展示本地文件路径
   let sub: string | null = null;
   if (job.status === "running") {
     const size =
@@ -58,7 +61,6 @@ function JobRow({
         : fmtBytes(job.downloadedBytes);
     sub = t("queue.runningSub", { size, speed: fmtSpeed(job.speed), eta: fmtEta(job.eta) });
   } else if (job.status === "failed" && job.error) sub = job.error;
-  else if (job.status === "completed" && job.outputPath) sub = job.outputPath;
 
   return (
     <div className={`row ${job.status}`} role="row">
@@ -94,6 +96,16 @@ function JobRow({
             onClick={() => openDownloadLocation(job.outputPath ?? "", outputDir).catch(console.error)}
           >
             <Icon name="folder-reveal" size={14} />
+          </button>
+        )}
+        {!active && (
+          <button
+            className="icon"
+            aria-label={t("queue.delete")}
+            title={t("queue.delete")}
+            onClick={() => onDelete(job)}
+          >
+            <Icon name="trash" size={14} />
           </button>
         )}
       </span>
