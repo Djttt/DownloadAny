@@ -2,6 +2,7 @@
 
 use crate::error::AppError;
 use std::collections::HashSet;
+use std::path::Path;
 
 /// 用户可选的合成格式（哨兵值，不是 yt-dlp 原生 format id）
 pub const FMT_BEST: &str = "__best__";
@@ -235,6 +236,12 @@ pub fn build_download_args(
     args
 }
 
+/// 添加由应用内置的可信插件目录。路径不接受前端输入。
+pub fn add_plugin_dir(args: &mut Vec<String>, path: &Path) {
+    args.insert(0, path.to_string_lossy().into_owned());
+    args.insert(0, "--plugin-dirs".into());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -351,5 +358,12 @@ mod tests {
         );
         let args = build_download_args(FMT_BEST, "https://x", "/tmp/o", None, None);
         assert!(!args.iter().any(|a| a == "--proxy"));
+    }
+    #[test]
+    fn trusted_plugin_dir_is_passed_as_two_argv_items() {
+        let mut args = vec!["-J".to_string(), "https://example.com".to_string()];
+        add_plugin_dir(&mut args, Path::new("C:\\LumeAny Plugins"));
+        assert_eq!(args[0], "--plugin-dirs");
+        assert_eq!(args[1], "C:\\LumeAny Plugins");
     }
 }

@@ -28,6 +28,10 @@ src-tauri/binaries/
 # 编译进主程序的压缩基础组件（同样由 fetch-binaries.mjs 生成）
 src-tauri/embedded/
 
+# yt-dlp 插件（Python）编译缓存
+__pycache__/
+*.pyc
+
 # Claude Code 会话数据
 .claude/
 .tauri/

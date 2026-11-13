@@ -1,6 +1,6 @@
 //! 元数据探测：yt-dlp -J（--dump-single-json，默认 simulate 不下载）。
 
-use crate::{error::AppError, resolve};
+use crate::{args, embedded_components, error::AppError, resolve};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
@@ -38,12 +38,20 @@ pub struct ProbeResult {
 pub async fn probe(url: &str, proxy: Option<&str>) -> Result<ProbeResult, AppError> {
     let program = resolve::yt_dlp();
     let mut cmd = program.command();
-    let mut argv: Vec<&str> = vec!["-J", "--no-playlist", "--no-warnings", "--no-colors"];
+    let mut argv: Vec<String> = vec![
+        "-J".into(),
+        "--no-playlist".into(),
+        "--no-warnings".into(),
+        "--no-colors".into(),
+    ];
+    if let Ok(plugin_dir) = embedded_components::ensure_ytdlp_plugins() {
+        args::add_plugin_dir(&mut argv, &plugin_dir);
+    }
     // 探测与下载走同一代理，否则会出现"探测成功但下载连不上"（或反之）的割裂体验
     if let Some(p) = proxy {
-        argv.extend(["--proxy", p]);
+        argv.extend(["--proxy".into(), p.into()]);
     }
-    argv.push(url);
+    argv.push(url.into());
     cmd.args(argv)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

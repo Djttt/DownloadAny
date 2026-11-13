@@ -19,12 +19,11 @@ import { EyeIcon } from "./EyeIcon";
 import { Icon } from "./Icon";
 
 /* ========================================================================
- * 侧栏功能菜单:联系客服(悬停飞窗)/ 问题反馈(弹窗)/ 设置(弹窗)
+ * 侧栏功能菜单:联系客服(QQ 群二维码弹窗)/ 问题反馈(弹窗)/ 设置(弹窗)
  * ==================================================================== */
 
-// 客服渠道:邮箱与 QQ 群(点击复制到剪贴板)
-const SUPPORT_EMAIL = "2377176572@qq.com";
-const QQ_GROUP = "374519883";
+// QQ 群二维码图片:放在 public/qq-group-qr.png,换图只需覆盖该文件
+const QQ_QR_SRC = "/qq-group-qr.png";
 
 /* ---- 小图标(线性风格,继承 currentColor) ---- */
 
@@ -38,31 +37,6 @@ const I = {
   ),
   feedback: <Icon name="feedback" size={18} />,
   gear: <Icon name="settings" size={18} />,
-  telegram: (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M22 2 11 13" />
-      <path d="M22 2 15 22l-4-9-9-4L22 2Z" />
-    </svg>
-  ),
-  discord: (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M5.5 5.5C8 4.4 16 4.4 18.5 5.5l1.3 7.8c-2 1.9-4.2 2.9-6.4 3.1L12.6 15c-.4.1-.9.1-1.2 0l-.8 1.4c-2.2-.2-4.4-1.2-6.4-3.1L5.5 5.5Z" />
-      <circle cx="9.6" cy="10.4" r="1.1" fill="currentColor" stroke="none" />
-      <circle cx="14.4" cy="10.4" r="1.1" fill="currentColor" stroke="none" />
-    </svg>
-  ),
-  mail: (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <rect x="3" y="5.5" width="18" height="13" rx="2" />
-      <path d="m3.5 7 8.5 6 8.5-6" />
-    </svg>
-  ),
-  qq: (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M12 3.5c-3 0-5 2.6-5 5.5 0 .6-1 2.4-1.4 3.9-.4 1.6.3 2.3 1.3 1.9.3 1.4 1.2 2.6 2.3 3.3-.9.4-1.4 1-1.4 1.5 0 1 1.8 1.4 4.2 1.4s4.2-.4 4.2-1.4c0-.5-.5-1.1-1.4-1.5 1.1-.7 2-1.9 2.3-3.3 1 .4 1.7-.3 1.3-1.9C18 11.4 17 9.6 17 9c0-2.9-2-5.5-5-5.5Z" />
-      <path d="M10.2 8.2h.01M13.8 8.2h.01" strokeWidth="2.2" />
-    </svg>
-  ),
   close: (
     <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
       <path d="m3.5 3.5 9 9M12.5 3.5l-9 9" />
@@ -73,26 +47,6 @@ const I = {
 export { I as menuIcons };
 
 /* ---- 工具 ---- */
-
-async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    try {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.cssText = "position:fixed;opacity:0";
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand("copy");
-      ta.remove();
-      return ok;
-    } catch {
-      return false;
-    }
-  }
-}
 
 function useEscClose(onClose: () => void) {
   useEffect(() => {
@@ -131,47 +85,54 @@ function Modal({
   );
 }
 
-/* ---- 联系客服:悬停飞窗 ---- */
+/* ---- 联系客服:点击弹出 QQ 群二维码 ---- */
 
 export function SupportMenuItem() {
   const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState<string | null>(null);
-
-  async function handleCopy(key: string, value: string) {
-    if (await copyText(value)) {
-      setCopied(key);
-      window.setTimeout(() => setCopied((c) => (c === key ? null : c)), 1600);
-    }
-  }
+  const [qrFailed, setQrFailed] = useState(false);
 
   return (
-    <div
-      className="menu-host"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-    >
-      <button className="menu-row" type="button" aria-haspopup="menu" aria-expanded={open}>
+    <div className="menu-host">
+      <button
+        className="menu-row"
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen(true)}
+      >
         {I.headphones}
         <span>{t("menu.support")}</span>
       </button>
-      {open && (
-        <div className="flyout" role="menu">
-          <button className="fly-row" type="button" role="menuitem" onClick={() => handleCopy("email", SUPPORT_EMAIL)}>
-            {I.mail}
-            <span className="fly-copy">
-              <strong>{t("fly.email")}</strong>
-              <small>{copied === "email" ? t("fly.copied") : SUPPORT_EMAIL}</small>
-            </span>
-          </button>
-          <button className="fly-row" type="button" role="menuitem" onClick={() => handleCopy("qq", QQ_GROUP)}>
-            {I.qq}
-            <span className="fly-copy">
-              <strong>{t("fly.qq")}</strong>
-              <small>{copied === "qq" ? t("fly.copied") : QQ_GROUP}</small>
-            </span>
-          </button>
-        </div>
-      )}
+      {open &&
+        createPortal(
+          <Modal label={t("support.qqTitle")} onClose={() => setOpen(false)}>
+            <header className="modal-head">
+              <h3>{t("support.qqTitle")}</h3>
+              <button
+                className="clear"
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label={t("common.close")}
+              >
+                {I.close}
+              </button>
+            </header>
+            <div className="modal-body qq-group-body">
+              {qrFailed ? (
+                <div className="qq-group-missing">
+                  <span>{t("support.qqQrMissing")}</span>
+                  <code>public/qq-group-qr.png</code>
+                </div>
+              ) : (
+                <div className="qq-group-qr">
+                  <img src={QQ_QR_SRC} alt={t("support.qqQrAlt")} onError={() => setQrFailed(true)} />
+                </div>
+              )}
+              <p className="qq-group-hint">{t("support.qqHint")}</p>
+            </div>
+          </Modal>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -890,14 +851,11 @@ function NetworkPane({
           {detect === "none" && <p className="setting-note">{t("set.proxyDetectNone")}</p>}
         </div>
       )}
-      <p className="setting-note">{t("set.proxyNote")}</p>
-      <p className="setting-note">
-        {activeUrl
-          ? t("set.proxyEffective", { url: activeUrl })
-          : proxyType === "none"
-            ? t("set.proxyInactive")
-            : t("set.proxyAddrMissing")}
-      </p>
+      {(activeUrl || (proxyType !== "none" && !activeUrl)) && (
+        <p className="setting-note">
+          {activeUrl ? t("set.proxyEffective", { url: activeUrl }) : t("set.proxyAddrMissing")}
+        </p>
+      )}
       <div className="setting-block net-test-block">
         <div className="net-test-head">
           <h4>{t("set.netTestTitle")}</h4>
@@ -921,7 +879,6 @@ function NetworkPane({
             );
           })}
         </div>
-        <p className="setting-note">{t("set.netTestNote")}</p>
       </div>
     </>
   );
