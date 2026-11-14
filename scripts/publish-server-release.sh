@@ -16,6 +16,7 @@
 # 覆盖用环境变量：SERVER=ubuntu@www.lumeany.cc API=https://api.lumeany.cc \
 #                  REMOTE_ROOT=/srv/downloadany REPO=Djttt/DownloadAny \
 #                  GH_TOKEN=…（私有仓库【必需】且可免限流；fine-grained 只给 Contents:read 即可）
+#                  DL_PROXY=http://127.0.0.1:7897（仅大文件下载走代理）
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -39,6 +40,10 @@ TAG="v$VER"
 
 auth=()
 [[ -n "${GH_TOKEN:-}" ]] && auth=(-H "Authorization: Bearer $GH_TOKEN")
+# DL_PROXY 只作用于大文件下载；api.github.com 元数据调用保持直连，
+# 避免共享代理出口 IP 耗尽 API 限流后连 Release JSON 都取不到
+dlproxy=()
+[[ -n "${DL_PROXY:-}" ]] && dlproxy=(-x "$DL_PROXY")
 
 echo "== [1/4] 解析并下载 Release $TAG 的 updater 产物 =="
 # ${auth[@]+"${auth[@]}"}：bash 3.2（macOS 默认）下空数组 + set -u 会报 unbound variable
@@ -56,18 +61,19 @@ win = one(lambda a: a["name"].lower().endswith("-setup.exe"), "windows exe")
 mac = one(lambda a: a["name"].endswith(".app.tar.gz"), "macos tar.gz")
 sig = lambda base: one(lambda a, b=base: a["name"] == b + ".sig", f"{base} sig")
 for a in (win, sig(win["name"]), mac, sig(mac["name"])):
-    print(f"{a['name']}\t{a['url']}")
+    # browser_download_url 走 CDN，不占 API 限流额度（API 资产端点每次重定向都计数）
+    print(f"{a['name']}\t{a['browser_download_url']}")
 PY
 )"
 names=(); while IFS=$'\t' read -r n u; do names+=("$n"); done <<<"$names_raw"
 printf '  %s\n' "${names[@]}"
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
-echo "  下载（API 资产端点，私有仓库带 GH_TOKEN 同样可用）"
+echo "  下载（browser_download_url，私有仓库带 GH_TOKEN 同样可用；DL_PROXY 可指定下载代理）"
 while IFS=$'\t' read -r n u; do
-  # API 资产端点必须 Accept: application/octet-stream 才返回二进制本体；
-  # vnd.github+json 会返回 ~2KB 的资产元数据 JSON（曾把元数据当产物上传）
-  curl -fsSL ${auth[@]+"${auth[@]}"} -H "Accept: application/octet-stream" -o "$tmp/$n" "$u"
+  curl -fsSL ${dlproxy[@]+"${dlproxy[@]}"} ${auth[@]+"${auth[@]}"} -o "$tmp/$n" "$u"
+  # 防回归：资产若又被取成元数据 JSON，这里直接失败
+  [[ $(wc -c <"$tmp/$n") -gt 5000 || "$n" == *.sig ]] || { echo "产物 $n 过小，疑似非二进制" >&2; exit 1; }
 done <<<"$names_raw"
 
 echo "== [2/4] 上传到 $SERVER 并落位 $REMOTE_ROOT/desktop/$VER/ =="
