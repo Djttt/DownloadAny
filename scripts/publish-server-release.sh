@@ -41,7 +41,8 @@ auth=()
 [[ -n "${GH_TOKEN:-}" ]] && auth=(-H "Authorization: Bearer $GH_TOKEN")
 
 echo "== [1/4] 解析并下载 Release $TAG 的 updater 产物 =="
-release_json="$(curl -fsSL "${auth[@]}" "https://api.github.com/repos/$REPO/releases/tags/$TAG")"
+# ${auth[@]+"${auth[@]}"}：bash 3.2（macOS 默认）下空数组 + set -u 会报 unbound variable
+release_json="$(curl -fsSL ${auth[@]+"${auth[@]}"} "https://api.github.com/repos/$REPO/releases/tags/$TAG")"
 # 命令赋值参与 set -e：选集不精确（少/多任一必需产物）直接失败并列出实际资产
 names_raw="$(python3 - "$release_json" <<'PY'
 import json, sys
@@ -64,7 +65,9 @@ printf '  %s\n' "${names[@]}"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 echo "  下载（API 资产端点，私有仓库带 GH_TOKEN 同样可用）"
 while IFS=$'\t' read -r n u; do
-  curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" -o "$tmp/$n" "$u"
+  # API 资产端点必须 Accept: application/octet-stream 才返回二进制本体；
+  # vnd.github+json 会返回 ~2KB 的资产元数据 JSON（曾把元数据当产物上传）
+  curl -fsSL ${auth[@]+"${auth[@]}"} -H "Accept: application/octet-stream" -o "$tmp/$n" "$u"
 done <<<"$names_raw"
 
 echo "== [2/4] 上传到 $SERVER 并落位 $REMOTE_ROOT/desktop/$VER/ =="
@@ -113,11 +116,11 @@ publish("macos", "aarch64", mac_tgz, mac_sig)
 PY
 REMOTE
 
-echo "== [4/4] 回查端点验收（以 0.1.1 客户端视角，期望 200）=="
+echo "== [4/4] 回查端点验收（以 0.0.0 老客户端视角，期望 200；同版本视角 204 属正常）=="
 for ta in "windows/x86_64" "darwin/aarch64"; do
-  echo "  $ta -> $(curl -s -m10 -o /dev/null -w '%{http_code}' "$API/api/updates/desktop/$ta/0.1.1")"
+  echo "  $ta -> $(curl -s -m10 -o /dev/null -w '%{http_code}' "$API/api/updates/desktop/$ta/0.0.0")"
 done
-curl -s -m10 "$API/api/updates/desktop/darwin/aarch64/0.1.1" | python3 -m json.tool
+curl -s -m10 "$API/api/updates/desktop/darwin/aarch64/0.0.0" | python3 -m json.tool
 
 echo
 echo "完成。后续：灰度调整 PATCH $API/api/updates/admin/desktop/<id> {\"rollout_percent\":N}；"
