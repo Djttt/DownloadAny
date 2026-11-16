@@ -19,6 +19,17 @@ pub struct FormatOption {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ImageOption {
+    pub id: String,
+    pub label: String,
+    pub url: String,
+    pub ext: String,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VideoInfo {
     pub id: String,
     pub title: String,
@@ -26,6 +37,8 @@ pub struct VideoInfo {
     pub thumbnail: Option<String>,
     pub uploader: Option<String>,
     pub webpage_url: Option<String>,
+    #[serde(default)]
+    pub images: Vec<ImageOption>,
     pub formats: Vec<FormatOption>,
 }
 
@@ -83,6 +96,7 @@ pub async fn probe(url: &str, proxy: Option<&str>) -> Result<ProbeResult, AppErr
         thumbnail: json["thumbnail"].as_str().map(String::from),
         uploader: json["uploader"].as_str().map(String::from),
         webpage_url: json["webpage_url"].as_str().map(String::from),
+        images: Vec::new(),
         formats,
     };
     Ok(ProbeResult { info, valid_ids })

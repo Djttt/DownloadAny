@@ -8,6 +8,15 @@ export interface FormatOption {
   filesize?: number | null;
 }
 
+export interface ImageOption {
+  id: string;
+  label: string;
+  url: string;
+  ext: string;
+  width?: number | null;
+  height?: number | null;
+}
+
 export interface VideoInfo {
   id: string;
   title: string;
@@ -15,6 +24,7 @@ export interface VideoInfo {
   thumbnail?: string | null;
   uploader?: string | null;
   webpageUrl?: string | null;
+  images?: ImageOption[];
   formats: FormatOption[];
 }
 

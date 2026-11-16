@@ -14,6 +14,7 @@ pub const FMT_THUMBNAIL_JPG: &str = "__thumbnail_jpg__";
 pub const FMT_THUMBNAIL_PNG: &str = "__thumbnail_png__";
 pub const FMT_THUMBNAIL_WEBP: &str = "__thumbnail_webp__";
 pub const FMT_SUBTITLES: &str = "__subtitles__";
+pub const FMT_DIRECT_IMAGE: &str = "__direct_image__";
 
 fn subtitle_language(raw: &str) -> Option<&str> {
     let language = raw.strip_prefix("__subtitle_")?.strip_suffix("__")?;
@@ -114,6 +115,7 @@ pub fn validate_format(raw: &str, probed_ids: &HashSet<String>) -> Result<(), Ap
             | FMT_THUMBNAIL_PNG
             | FMT_THUMBNAIL_WEBP
             | FMT_SUBTITLES
+            | FMT_DIRECT_IMAGE
     ) {
         return Ok(());
     }
@@ -144,7 +146,9 @@ pub fn build_download_args(
     let output_template = if cfg!(windows) {
         // Windows 临时分片还会追加格式号、分片号等后缀；限制标题长度避免
         // 超过 Win32 路径/文件名限制后抛出 `[Errno 22] Invalid argument`。
-        "%(title).120B [%(id)s].%(ext)s"
+        // Generic extractor may derive `id` from the complete query string
+        // (notably signed WeChat CDN URLs), so bound both dynamic fields.
+        "%(title).120B [%(id).24B].%(ext)s"
     } else {
         "%(title)s [%(id)s].%(ext)s"
     };
@@ -172,6 +176,30 @@ pub fn build_download_args(
     if let Some(loc) = ffmpeg_location {
         args.push("--ffmpeg-location".into());
         args.push(loc.into());
+    }
+    // 视频号解析返回的是带签名的腾讯 CDN 直链。浏览器请求会携带视频号
+    // Referer，而 yt-dlp 的 Generic extractor 默认不会；CDN 因而可能在
+    // 解析成功后拒绝真正的媒体下载。
+    let download_host = url::Url::parse(url)
+        .ok()
+        .and_then(|parsed| parsed.host_str().map(str::to_ascii_lowercase))
+        .unwrap_or_default();
+    if download_host == "finder.video.qq.com" {
+        args.extend([
+            "--add-header".into(),
+            "Referer:https://channels.weixin.qq.com/".into(),
+        ]);
+    } else if download_host == "douyinpic.com"
+        || download_host.ends_with(".douyinpic.com")
+        || download_host == "douyinvod.com"
+        || download_host.ends_with(".douyinvod.com")
+        || download_host == "z1cdn.com"
+        || download_host.ends_with(".z1cdn.com")
+    {
+        args.extend([
+            "--add-header".into(),
+            "Referer:https://www.douyin.com/".into(),
+        ]);
     }
     match format_id {
         FMT_BEST => args.extend(["-f".into(), "bv*+ba/b".into()]),
@@ -218,6 +246,7 @@ pub fn build_download_args(
             "--convert-subs".into(),
             "srt".into(),
         ]),
+        FMT_DIRECT_IMAGE => {}
         id if subtitle_language(id).is_some() => args.extend([
             "--skip-download".into(),
             "--write-subs".into(),
@@ -287,7 +316,7 @@ mod tests {
     fn windows_uses_safe_bounded_filenames() {
         let args = build_download_args(FMT_BEST, "https://x", "C:\\Downloads", None, None);
         assert!(args.contains(&"--windows-filenames".to_string()));
-        assert!(args.contains(&"%(title).120B [%(id)s].%(ext)s".to_string()));
+        assert!(args.contains(&"%(title).120B [%(id).24B].%(ext)s".to_string()));
     }
 
     #[test]
@@ -358,6 +387,48 @@ mod tests {
         );
         let args = build_download_args(FMT_BEST, "https://x", "/tmp/o", None, None);
         assert!(!args.iter().any(|a| a == "--proxy"));
+    }
+
+    #[test]
+    fn wechat_cdn_download_carries_channels_referer() {
+        let args = build_download_args(
+            FMT_BEST,
+            "https://finder.video.qq.com/251/20302/stodownload?token=signed",
+            "/tmp/o",
+            None,
+            None,
+        );
+        assert!(args.windows(2).any(|pair| {
+            pair[0] == "--add-header" && pair[1] == "Referer:https://channels.weixin.qq.com/"
+        }));
+
+        let ordinary = build_download_args(
+            FMT_BEST,
+            "https://example.com/video.mp4",
+            "/tmp/o",
+            None,
+            None,
+        );
+        assert!(!ordinary.iter().any(|arg| arg == "--add-header"));
+    }
+
+    #[test]
+    fn douyin_gallery_image_uses_direct_download_with_referer() {
+        let args = build_download_args(
+            FMT_DIRECT_IMAGE,
+            "https://p3-pc-sign.douyinpic.com/path/image.webp?token=signed",
+            "/tmp/o",
+            None,
+            None,
+        );
+        assert!(args.windows(2).any(|pair| {
+            pair[0] == "--add-header" && pair[1] == "Referer:https://www.douyin.com/"
+        }));
+        assert!(!args.iter().any(|arg| arg == "-f"));
+        assert_eq!(
+            args.last().unwrap(),
+            "https://p3-pc-sign.douyinpic.com/path/image.webp?token=signed"
+        );
     }
     #[test]
     fn trusted_plugin_dir_is_passed_as_two_argv_items() {

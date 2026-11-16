@@ -321,7 +321,7 @@ function App() {
           void trackAnalyticsEvent("parse_requested", { mediaUrl: url });
           try {
             const info = await parseVideo(url);
-            await cacheProbeResult(url, info);
+            await cacheProbeResult(info.webpageUrl || url, info);
             void trackAnalyticsEvent("parse_succeeded", {
               mediaId: info.id,
               mediaTitle: info.title,
@@ -329,7 +329,12 @@ function App() {
             });
             if (autoMode && info.formats[0]) {
               if (autoCancelRequested.current) continue;
-              const id = await enqueue(info.formats[0], url, info.title, info.id);
+              const id = await enqueue(
+                info.formats[0],
+                info.webpageUrl || url,
+                info.title,
+                info.id,
+              );
               if (id != null) {
                 if (autoCancelRequested.current) {
                   cancelDownload(id).catch(() => {});
@@ -584,7 +589,20 @@ function App() {
                   busy={false}
                   outputDir={outputDir}
                   jobs={jobs}
-                  onDownload={(format) => enqueue(format, item.url, item.info.title, item.info.id)}
+                  onDownload={async (format, urlOverride, titleSuffix) => {
+                    const targetUrl = urlOverride || item.info.webpageUrl || item.url;
+                    const title = titleSuffix ? `${item.info.title} - ${titleSuffix}` : item.info.title;
+                    if (urlOverride) {
+                      await cacheProbeResult(targetUrl, {
+                        ...item.info,
+                        title,
+                        webpageUrl: targetUrl,
+                        images: [],
+                        formats: [format],
+                      });
+                    }
+                    return enqueue(format, targetUrl, title, item.info.id);
+                  }}
                   onCancel={cancel}
                   onDiscard={() => setVideos((current) => current.filter((video) => video.key !== item.key))}
                 />

@@ -22,52 +22,85 @@ interface Props {
   busy: boolean;
   outputDir: string;
   jobs: Record<number, JobRecord>;
-  onDownload: (format: FormatOption) => Promise<number | undefined>;
+  onDownload: (format: FormatOption, urlOverride?: string, titleSuffix?: string) => Promise<number | undefined>;
   onCancel: (id: number) => void;
   onDiscard: () => void;
 }
 
-type RowKind = "video" | "audio" | "image" | "subtitle";
-
 export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, onDiscard }: Props) {
-  const videoFormats = useMemo(
-    () =>
-      video.formats.filter(
-        (f) => !f.id.startsWith("__") || f.id.startsWith("__video_"),
-      ),
-    [video.formats],
-  );
+  const videoFormats = useMemo(() => {
+    const explicitFormats = video.formats.filter(
+      (format) => !format.id.startsWith("__") || format.id.startsWith("__video_"),
+    );
+    if (explicitFormats.length > 0) return explicitFormats;
+
+    // Some extractors do not expose a numeric resolution. Keep yt-dlp's
+    // automatic best-format selector only as a last-resort download option.
+    return video.formats.filter((format) => format.id === "__best__");
+  }, [video.formats]);
   const subtitleLanguages = useMemo(
     () => video.formats.filter((format) => format.id.startsWith("__subtitle_")),
     [video.formats],
   );
-  const [selected, setSelected] = useState<Record<RowKind, string>>({
+  const galleryImages = video.images ?? [];
+  const isGallery = galleryImages.length > 0;
+  const [selected, setSelected] = useState<Record<string, string>>({
     video: videoFormats[0]?.id ?? "",
     audio: AUDIO_FORMATS[0].id,
     image: IMAGE_FORMATS[0].id,
     subtitle: subtitleLanguages[0]?.id ?? "",
+    ...Object.fromEntries(galleryImages.map((_, index) => [`gallery-${index}`, "__direct_image__"])),
   });
-  const [rowJobs, setRowJobs] = useState<Partial<Record<RowKind, number>>>({});
+  const [rowJobs, setRowJobs] = useState<Partial<Record<string, number>>>({});
 
-  async function start(kind: RowKind, options: FormatOption[]) {
+  async function start(
+    kind: string,
+    options: FormatOption[],
+    urlOverride?: string,
+    titleSuffix?: string,
+  ) {
     const format = options.find((item) => item.id === selected[kind]);
     if (!format) return;
-    const id = await onDownload(format);
+    const id = await onDownload(format, urlOverride, titleSuffix);
     if (id != null) setRowJobs((current) => ({ ...current, [kind]: id }));
   }
 
   return (
-    <div className="format-panel">
-      <div className="video-summary">
-        {video.thumbnail && (
-          <div className="video-thumb-wrap">
-            <img className="thumb" src={video.thumbnail} alt="" referrerPolicy="no-referrer" />
-            {video.duration != null && <span className="video-duration">{fmtDuration(video.duration)}</span>}
-          </div>
-        )}
-      </div>
+    <div className={`format-panel${isGallery ? " gallery-panel" : ""}`}>
+      {!isGallery && (
+        <div className="video-summary">
+          {video.thumbnail && (
+            <div className="video-thumb-wrap">
+              <img className="thumb" src={video.thumbnail} alt="" referrerPolicy="no-referrer" />
+              {video.duration != null && <span className="video-duration">{fmtDuration(video.duration)}</span>}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="download-options">
+        {galleryImages.map((image, index) => {
+          const kind = `gallery-${index}`;
+          const options: FormatOption[] = [
+            { id: "__direct_image__", label: t("image.original"), ext: image.ext },
+          ];
+          return (
+            <DownloadRow
+              key={image.id || kind}
+              label={image.label || t("image.numbered", { n: index + 1 })}
+              icon="cover"
+              selectLabel={t("cover.format")}
+              options={options}
+              value={selected[kind]}
+              job={rowJobs[kind] == null ? undefined : jobs[rowJobs[kind]!]}
+              busy={busy}
+              outputDir={outputDir}
+              onChange={(value) => setSelected((current) => ({ ...current, [kind]: value }))}
+              onDownload={() => start(kind, options, image.url, image.label)}
+              onCancel={onCancel}
+            />
+          );
+        })}
         <DownloadRow
           label={t("video.label")}
           icon="video"
@@ -77,37 +110,43 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
           job={rowJobs.video == null ? undefined : jobs[rowJobs.video]}
           busy={busy}
           outputDir={outputDir}
+          emptyLabel={t("video.noFormat")}
           showSelectedSize
           onChange={(value) => setSelected((current) => ({ ...current, video: value }))}
           onDownload={() => start("video", videoFormats)}
           onCancel={onCancel}
         />
-        <DownloadRow
-          label={t("subtitle.label")}
-          icon="subtitle"
-          selectLabel={t("subtitle.language")}
-          options={subtitleLanguages}
-          value={selected.subtitle}
-          job={rowJobs.subtitle == null ? undefined : jobs[rowJobs.subtitle]}
-          busy={busy}
-          outputDir={outputDir}
-          onChange={(value) => setSelected((current) => ({ ...current, subtitle: value }))}
-          onDownload={() => start("subtitle", subtitleLanguages)}
-          onCancel={onCancel}
-        />
-        <DownloadRow
-          label={t("audio.label")}
-          icon="audio"
-          selectLabel={t("audio.format")}
-          options={AUDIO_FORMATS}
-          value={selected.audio}
-          job={rowJobs.audio == null ? undefined : jobs[rowJobs.audio]}
-          busy={busy}
-          outputDir={outputDir}
-          onChange={(value) => setSelected((current) => ({ ...current, audio: value }))}
-          onDownload={() => start("audio", AUDIO_FORMATS)}
-          onCancel={onCancel}
-        />
+        {!isGallery && (
+          <DownloadRow
+            label={t("subtitle.label")}
+            icon="subtitle"
+            selectLabel={t("subtitle.language")}
+            options={subtitleLanguages}
+            value={selected.subtitle}
+            job={rowJobs.subtitle == null ? undefined : jobs[rowJobs.subtitle]}
+            busy={busy}
+            outputDir={outputDir}
+            emptyLabel={t("video.noSubtitle")}
+            onChange={(value) => setSelected((current) => ({ ...current, subtitle: value }))}
+            onDownload={() => start("subtitle", subtitleLanguages)}
+            onCancel={onCancel}
+          />
+        )}
+        {!isGallery && (
+          <DownloadRow
+            label={t("audio.label")}
+            icon="audio"
+            selectLabel={t("audio.format")}
+            options={AUDIO_FORMATS}
+            value={selected.audio}
+            job={rowJobs.audio == null ? undefined : jobs[rowJobs.audio]}
+            busy={busy}
+            outputDir={outputDir}
+            onChange={(value) => setSelected((current) => ({ ...current, audio: value }))}
+            onDownload={() => start("audio", AUDIO_FORMATS)}
+            onCancel={onCancel}
+          />
+        )}
         <DownloadRow
           label={t("cover.label")}
           icon="cover"
@@ -145,6 +184,7 @@ function DownloadRow({
   onDownload,
   onCancel,
   showSelectedSize = false,
+  emptyLabel,
 }: {
   label: string;
   icon: IconName;
@@ -158,6 +198,7 @@ function DownloadRow({
   onDownload: () => void;
   onCancel: (id: number) => void;
   showSelectedSize?: boolean;
+  emptyLabel?: string;
 }) {
   const active = job?.status === "queued" || job?.status === "running";
   const hasProgress = Boolean(
@@ -203,6 +244,7 @@ function DownloadRow({
               value={value}
               options={options}
               label={selectLabel}
+              emptyLabel={emptyLabel}
               onChange={onChange}
             />
             {showSelectedSize && selectedOption?.filesize && (
@@ -236,6 +278,11 @@ function DownloadRow({
           </div>
         </>
       )}
+      {job?.status === "failed" && job.error && (
+        <div className="download-error" role="alert" title={job.error}>
+          {job.error}
+        </div>
+      )}
     </div>
   );
 }
@@ -244,11 +291,13 @@ function FormatSelect({
   value,
   options,
   label,
+  emptyLabel,
   onChange,
 }: {
   value: string;
   options: FormatOption[];
   label: string;
+  emptyLabel?: string;
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -278,7 +327,7 @@ function FormatSelect({
           if (event.key === "Escape") setOpen(false);
         }}
       >
-        <span>{selected?.label ?? t("video.noSubtitle")}</span>
+        <span>{selected?.label ?? emptyLabel ?? t("video.noFormat")}</span>
         <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden>
           <path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>

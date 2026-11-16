@@ -1319,6 +1319,15 @@ select:focus-visible {
   color: var(--amber);
 }
 
+.download-error {
+  grid-column: 2 / 4;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--red);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .mini-cancel {
   width: 20px;
   height: 20px;
@@ -2908,6 +2917,10 @@ select:focus-visible {
     transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
     border-color 0.28s ease,
     box-shadow 0.28s ease;
+}
+
+.format-panel.gallery-panel {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .format-panel:has(.format-select.open) {

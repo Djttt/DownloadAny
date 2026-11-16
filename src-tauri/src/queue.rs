@@ -529,6 +529,9 @@ async fn run_job(app: AppHandle, state: AppState, id: u64, opts: DownloadOptions
     } else {
         None
     };
+    if let Some(message) = error.as_deref() {
+        eprintln!("download job {id} failed: {message}");
+    }
     finish(&app, &state, id, status, error);
     state.inner.controls.lock().unwrap().remove(&id);
 }
