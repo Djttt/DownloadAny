@@ -1,11 +1,10 @@
-//! MCP 工具面：解析统一请求业务后端，下载/进度/取消直连本地 queue 管线。
+//! MCP 工具面：解析与下载均直连本地 queue/pipeline（站点限流由用户各自出口承担；
+//! 服务端解析已停用，避免共享出口 IP 被站点风控）。
 //! agent 可达的 format_id 走窄白名单（本次 probe 返回的可见选项 + 最佳/MP3 哨兵），
 //! `args.rs` 的宽校验仍是下载命令的唯一边界。
 
 use crate::{
-    args,
-    backend::{self, BackendAuthState},
-    mcp_prefs,
+    args, mcp_prefs,
     probe::FormatOption,
     queue::{self, AppState, ProbedInfo},
 };
@@ -75,17 +74,15 @@ pub struct CancelArgs {
 pub struct AgentTools {
     app: AppHandle,
     state: AppState,
-    auth: BackendAuthState,
     /// url -> probe 时用过的代理：探测/下载同代理，避免"探测成功下载连不上"割裂
     proxy_memory: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl AgentTools {
-    pub fn new(app: AppHandle, state: AppState, auth: BackendAuthState) -> Self {
+    pub fn new(app: AppHandle, state: AppState) -> Self {
         Self {
             app,
             state,
-            auth,
             proxy_memory: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -115,30 +112,22 @@ impl AgentTools {
         }
     }
 
-    async fn probe_backend_and_cache(
+    /// 本地解析并缓存白名单（probe_and_cache 内部完成 cache_probe）。
+    async fn probe_local_and_cache(
         &self,
         url: &str,
+        proxy: Option<&str>,
     ) -> Result<crate::probe::VideoInfo, ErrorData> {
-        let info = backend::parse_video(&self.auth, url)
+        queue::probe_and_cache(url, proxy, &self.state)
             .await
-            .map_err(internal_err)?;
-        let formats = info.formats.clone();
-        self.state.cache_probe(
-            url,
-            ProbedInfo {
-                valid_ids: std::collections::HashSet::new(),
-                title: info.title.clone(),
-                formats,
-            },
-        );
-        Ok(info)
+            .map_err(internal_err)
     }
 }
 
 #[tool_router]
 impl AgentTools {
     #[tool(
-        description = "通过 LumeAny 后端解析视频链接，返回标题、时长（秒）与人读清晰度选项；formats[].id 即 start_download 的 formatId 取值（__best__ 为最高画质，__audio_mp3__ 仅音频）。proxy 可省略，仅用于后续本地下载。"
+        description = "在本机用 yt-dlp 解析视频链接，返回标题、时长（秒）与人读清晰度选项；formats[].id 即 start_download 的 formatId 取值（__best__ 为最高画质，__audio_mp3__ 仅音频）。proxy 可省略，同时作用于本次解析与后续下载。"
     )]
     async fn probe_video(
         &self,
@@ -147,7 +136,7 @@ impl AgentTools {
         let url = p.url.trim().to_string();
         args::validate_url(&url).map_err(internal_err)?;
         let proxy = self.resolve_proxy(&url, p.proxy.as_deref())?;
-        let info = self.probe_backend_and_cache(&url).await?;
+        let info = self.probe_local_and_cache(&url, proxy.as_deref()).await?;
         self.remember_proxy(&url, proxy.as_ref());
         let formats: Vec<Value> = agent_formats(&info.formats)
             .into_iter()
@@ -181,7 +170,7 @@ impl AgentTools {
         let format_id = p.format_id.unwrap_or_else(|| args::FMT_BEST.to_string());
         let proxy = self.resolve_proxy(&url, p.proxy.as_deref())?;
         if self.state.probe_meta(&url).is_none() {
-            self.probe_backend_and_cache(&url).await?;
+            self.probe_local_and_cache(&url, proxy.as_deref()).await?;
             self.remember_proxy(&url, proxy.as_ref());
         }
         let meta = self

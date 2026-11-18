@@ -8,11 +8,11 @@ import {
   listJobs,
   onJobProgress,
   onJobStatus,
+  probeVideo,
   setMaxConcurrency,
   updateYtdlpComponent,
   type UnlistenFn,
 } from "./lib/tauri";
-import { parseVideo } from "./lib/media";
 import {
   CONCURRENCY_DEFAULT,
   CONCURRENCY_MAX,
@@ -77,7 +77,8 @@ function App() {
   const [maxConcurrency, setMaxConcurrencyState] = useState(CONCURRENCY_DEFAULT);
   const [proxyType, setProxyTypeState] = useState<ProxyType>("none");
   const [proxyAddr, setProxyAddrState] = useState("");
-  // 代理只交给本地 yt-dlp 下载；元数据解析由后端按服务端网络配置执行。
+  // 解析与下载都交给本地 yt-dlp（服务端解析停用：共享出口 IP 易触发站点限流）；
+  // 用户代理偏好两条链路同走。
   const proxyUrl = buildProxyUrl(proxyType, proxyAddr);
   const [autoJobIds, setAutoJobIds] = useState<number[]>([]);
   const [autoCancelling, setAutoCancelling] = useState(false);
@@ -321,8 +322,9 @@ function App() {
           if (!url) break;
           void trackAnalyticsEvent("parse_requested", { mediaUrl: url });
           try {
-            const info = await parseVideo(url);
-            await cacheProbeResult(info.webpageUrl || url, info);
+            // 本地 yt-dlp 解析：probe_and_cache 已在 Rust 侧登记格式白名单，
+            // 无需再走 cacheProbeResult；代理与下载同源生效。
+            const info = await probeVideo(url, proxyUrl || null);
             void trackAnalyticsEvent("parse_succeeded", {
               mediaId: info.id,
               mediaTitle: info.title,

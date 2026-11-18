@@ -1,7 +1,7 @@
 //! MCP 服务生命周期：Streamable HTTP 挂 127.0.0.1:8790/mcp，默认关闭、随开随停。
 //! bind 失败以状态结构返回（Ok），不炸调用方；停止走优雅关停 + 3s 兜底 abort。
 
-use crate::{backend::BackendAuthState, error::AppError, mcp_tools::AgentTools, queue};
+use crate::{error::AppError, mcp_tools::AgentTools, queue};
 use rmcp::transport::streamable_http_server::{
     StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
 };
@@ -66,7 +66,6 @@ pub async fn mcp_status() -> McpStatus {
 pub async fn set_mcp_enabled(
     app: tauri::AppHandle,
     state: tauri::State<'_, queue::AppState>,
-    auth: tauri::State<'_, BackendAuthState>,
     on: bool,
 ) -> Result<McpStatus, AppError> {
     let mut guard = RUNTIME.lock().await;
@@ -104,9 +103,8 @@ pub async fn set_mcp_enabled(
     };
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
     let state = state.inner().clone();
-    let auth = auth.inner().clone();
     let service = StreamableHttpService::new(
-        move || Ok(AgentTools::new(app.clone(), state.clone(), auth.clone())),
+        move || Ok(AgentTools::new(app.clone(), state.clone())),
         Arc::new(LocalSessionManager::default()),
         StreamableHttpServerConfig::default().with_json_response(true),
     );

@@ -25,7 +25,7 @@ pub async fn probe_video(
     queue::probe_and_cache(&url, proxy.as_deref(), &state).await
 }
 
-/// 登记后端解析结果，让本地下载队列继续执行“先解析、后下载”的格式白名单校验。
+/// 登记解析结果（图集按图下载等场景），让本地下载队列继续执行“先解析、后下载”的格式白名单校验。
 /// WebView 只能登记应用自有的格式哨兵，不能借此注入任意 yt-dlp format selector。
 #[tauri::command]
 pub fn cache_probe_result(

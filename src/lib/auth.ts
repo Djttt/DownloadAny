@@ -1,5 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
-
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "")
   ?? "http://127.0.0.1:8000";
 
@@ -34,13 +32,6 @@ interface StoredSession {
 
 let session = readSession();
 
-function syncBackendSession(): void {
-  const backendSession = session
-    ? { apiBase: API_BASE, accessToken: session.accessToken }
-    : null;
-  void invoke("set_backend_session", { session: backendSession }).catch(() => {});
-}
-
 /** 供非关键的统计请求关联登录用户；统计失败不能影响认证流程。 */
 export function currentAccessToken(): string | undefined {
   return session?.accessToken;
@@ -62,13 +53,11 @@ function saveSession(tokens: TokenResponse): void {
     expiresAt: Date.now() + tokens.expires_in * 1000,
   };
   localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  syncBackendSession();
 }
 
 function clearSession(): void {
   session = null;
   localStorage.removeItem(SESSION_KEY);
-  syncBackendSession();
 }
 
 function userFromApi(user: ApiUser): AuthUser {
@@ -237,7 +226,6 @@ export async function changePassword(currentPassword: string | null, newPassword
 export async function restoreUser(): Promise<AuthUser | null> {
   if (!session) return null;
   try {
-    syncBackendSession();
     if (session.expiresAt > Date.now() + 30_000) return await meWithToken(session.accessToken);
     if (!session.refreshToken) throw new Error("No refresh token");
     const tokens = await apiRequest<TokenResponse>("/api/auth/refresh", {
