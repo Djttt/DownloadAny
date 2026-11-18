@@ -765,7 +765,38 @@ select:focus-visible {
   border-radius: 8px;
   padding: 7px 10px;
   word-break: break-all;
-  white-space: pre-line;
+}
+.url-error > .summary { font-weight: 600; }
+.url-error > .item { margin-top: 8px; }
+.url-error > .item > .link {
+  font-size: 12px;
+  opacity: 0.7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 原始报错折叠区（解析横幅与下载错误条共用） */
+.url-error details,
+.download-error details {
+  margin-top: 4px;
+  font-size: 12px;
+  color: inherit;
+}
+.url-error details > summary,
+.download-error details > summary {
+  cursor: pointer;
+  opacity: 0.75;
+  user-select: none;
+}
+.url-error pre,
+.download-error pre {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  opacity: 0.8;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 /* ================= 初始平台墙 ================= */

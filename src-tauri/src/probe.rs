@@ -76,7 +76,8 @@ pub async fn probe(url: &str, proxy: Option<&str>) -> Result<ProbeResult, AppErr
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        let tail = stderr.lines().rev().take(3).collect::<Vec<_>>().join(" | ");
+        // 8 行窗口：前端展示层（errorHint）按特征词分类，3 行时常把关键 ERROR 行截掉
+        let tail = stderr.lines().rev().take(8).collect::<Vec<_>>().join(" | ");
         return Err(AppError::ProbeFailed(tail));
     }
 

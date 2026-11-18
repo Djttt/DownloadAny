@@ -38,6 +38,7 @@ import { setThemePref } from "./lib/theme";
 import { analyticsContext, trackAnalyticsEvent } from "./lib/analytics";
 import { loadDownloadHistory, removeDownloadHistory, saveDownloadHistory } from "./lib/history";
 import { restoreUser, type AuthUser } from "./lib/auth";
+import { describeError, singleErrorBanner, type ErrorBanner } from "./lib/errorHint";
 import { useAppUpdater } from "./lib/updater";
 import { Icon } from "./components/Icon";
 import { UrlBar } from "./components/UrlBar";
@@ -68,7 +69,7 @@ function App() {
   const [videos, setVideos] = useState<ParsedVideo[]>([]);
   const [urlInput, setUrlInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ErrorBanner | null>(null);
   const [jobs, setJobs] = useState<Record<number, JobRecord>>({});
   const [historyJobs, setHistoryJobs] = useState<JobRecord[]>([]);
   const [outputDir, setOutputDir] = useState("");
@@ -310,7 +311,7 @@ function App() {
     setAutoJobIds([]);
     setAutoCancelling(false);
     autoCancelRequested.current = false;
-    const failures: string[] = [];
+    const failures: { url: string; raw: string }[] = [];
     try {
       // 控制并发数，批量链接较多时避免同时启动过多 yt-dlp 进程。
       const pending = [...urls];
@@ -348,13 +349,19 @@ function App() {
             }
           } catch (e) {
             void trackAnalyticsEvent("parse_failed", { mediaUrl: url, error: String(e) });
-            failures.push(`${url}\n${String(e)}`);
+            failures.push({ url, raw: String(e) });
           }
         }
       });
       await Promise.all(workers);
       if (failures.length) {
-        setError(`${t("probe.failedCount", { n: failures.length })}\n${failures.join("\n\n")}`);
+        setError({
+          summary: t("probe.failedCount", { n: failures.length }),
+          items: failures.map((f) => {
+            const d = describeError(f.raw, "parse");
+            return { label: f.url, message: d.message, raw: d.detail ?? "" };
+          }),
+        });
       }
     } finally {
       setBusy(false);
@@ -396,7 +403,7 @@ function App() {
       setView("download");
       return id;
     } catch (e) {
-      setError(String(e));
+      setError(singleErrorBanner(String(e), "download"));
     }
   }
 
@@ -656,7 +663,7 @@ function App() {
   );
 
   function cancel(id: number) {
-    cancelDownload(id).catch((e) => setError(String(e)));
+    cancelDownload(id).catch((e) => setError(singleErrorBanner(String(e), "download")));
   }
 
   /** 删除一条历史记录：清掉持久化条目，并让内存态（jobs / historyJobs）同步消失。 */

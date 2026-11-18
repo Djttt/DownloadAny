@@ -3,6 +3,7 @@ import type { FormatOption, JobRecord, VideoInfo } from "../types";
 import { fmtBytes, fmtDuration, fmtSpeed } from "../lib/format";
 import { openDownloadLocation } from "../lib/tauri";
 import { t } from "../lib/i18n";
+import { describeError } from "../lib/errorHint";
 import { Icon, type IconName } from "./Icon";
 
 const AUDIO_FORMATS: FormatOption[] = [
@@ -217,6 +218,8 @@ function DownloadRow({
           ? t("status.cancelled")
           : null;
   const selectedOption = options.find((option) => option.id === value);
+  const failDesc =
+    job?.status === "failed" && job.error ? describeError(job.error, "download") : null;
 
   return (
     <div className="download-row">
@@ -278,9 +281,15 @@ function DownloadRow({
           </div>
         </>
       )}
-      {job?.status === "failed" && job.error && (
-        <div className="download-error" role="alert" title={job.error}>
-          {job.error}
+      {failDesc && (
+        <div className="download-error" role="alert" title={failDesc.detail ?? undefined}>
+          {failDesc.message}
+          {failDesc.detail && (
+            <details>
+              <summary>{t("err.rawToggle")}</summary>
+              <pre>{failDesc.detail}</pre>
+            </details>
+          )}
         </div>
       )}
     </div>

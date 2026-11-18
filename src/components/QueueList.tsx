@@ -2,6 +2,7 @@ import type { JobRecord } from "../types";
 import { fmtBytes, fmtEta, fmtSpeed } from "../lib/format";
 import { openDownloadLocation } from "../lib/tauri";
 import { t } from "../lib/i18n";
+import { describeError } from "../lib/errorHint";
 import { Icon } from "./Icon";
 
 const STATUS_TEXT = {
@@ -54,19 +55,27 @@ function JobRow({
 
   // 状态子行：只讲"到什么程度/为什么失败"；历史记录不展示本地文件路径
   let sub: string | null = null;
+  let subRaw: string | null = null;
   if (job.status === "running") {
     const size =
       job.totalBytes != null
         ? `${fmtBytes(job.downloadedBytes)} / ${fmtBytes(job.totalBytes)}`
         : fmtBytes(job.downloadedBytes);
     sub = t("queue.runningSub", { size, speed: fmtSpeed(job.speed), eta: fmtEta(job.eta) });
-  } else if (job.status === "failed" && job.error) sub = job.error;
+  } else if (job.status === "failed" && job.error) {
+    sub = describeError(job.error, "download").message;
+    subRaw = job.error;
+  }
 
   return (
     <div className={`row ${job.status}`} role="row">
       <span className="c-title" title={job.title}>
         <span className="t">{job.title}</span>
-        {sub && <span className="s">{sub}</span>}
+        {sub && (
+          <span className="s" title={subRaw ?? undefined}>
+            {sub}
+          </span>
+        )}
       </span>
       <span className="c-type">
         <span className={`chip ${job.status}`}>{job.formatLabel || t(STATUS_TEXT[job.status])}</span>
