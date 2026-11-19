@@ -19,8 +19,7 @@ pub async fn probe_video(
     url: String,
     proxy: Option<String>,
 ) -> Result<VideoInfo, AppError> {
-    let url = url.trim().to_string();
-    args::validate_url(&url)?;
+    let url = args::extract_url(&url)?;
     let proxy = args::validate_proxy(proxy.as_deref())?;
     queue::probe_and_cache(&url, proxy.as_deref(), &state).await
 }
@@ -33,8 +32,7 @@ pub fn cache_probe_result(
     url: String,
     info: VideoInfo,
 ) -> Result<(), AppError> {
-    let url = url.trim().to_string();
-    args::validate_url(&url)?;
+    let url = args::extract_url(&url)?;
     if info.formats.is_empty() || info.formats.len() > 50 {
         return Err(AppError::InvalidFormat("后端返回的格式列表无效".into()));
     }

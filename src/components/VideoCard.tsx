@@ -102,21 +102,23 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
             />
           );
         })}
-        <DownloadRow
-          label={t("video.label")}
-          icon="video"
-          selectLabel={t("video.quality")}
-          options={videoFormats}
-          value={selected.video}
-          job={rowJobs.video == null ? undefined : jobs[rowJobs.video]}
-          busy={busy}
-          outputDir={outputDir}
-          emptyLabel={t("video.noFormat")}
-          showSelectedSize
-          onChange={(value) => setSelected((current) => ({ ...current, video: value }))}
-          onDownload={() => start("video", videoFormats)}
-          onCancel={onCancel}
-        />
+        {!isGallery && (
+          <DownloadRow
+            label={t("video.label")}
+            icon="video"
+            selectLabel={t("video.quality")}
+            options={videoFormats}
+            value={selected.video}
+            job={rowJobs.video == null ? undefined : jobs[rowJobs.video]}
+            busy={busy}
+            outputDir={outputDir}
+            emptyLabel={t("video.noFormat")}
+            showSelectedSize
+            onChange={(value) => setSelected((current) => ({ ...current, video: value }))}
+            onDownload={() => start("video", videoFormats)}
+            onCancel={onCancel}
+          />
+        )}
         {!isGallery && (
           <DownloadRow
             label={t("subtitle.label")}
@@ -148,19 +150,21 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
             onCancel={onCancel}
           />
         )}
-        <DownloadRow
-          label={t("cover.label")}
-          icon="cover"
-          selectLabel={t("cover.format")}
-          options={IMAGE_FORMATS}
-          value={selected.image}
-          job={rowJobs.image == null ? undefined : jobs[rowJobs.image]}
-          busy={busy || !video.thumbnail}
-          outputDir={outputDir}
-          onChange={(value) => setSelected((current) => ({ ...current, image: value }))}
-          onDownload={() => start("image", IMAGE_FORMATS)}
-          onCancel={onCancel}
-        />
+        {!isGallery && (
+          <DownloadRow
+            label={t("cover.label")}
+            icon="cover"
+            selectLabel={t("cover.format")}
+            options={IMAGE_FORMATS}
+            value={selected.image}
+            job={rowJobs.image == null ? undefined : jobs[rowJobs.image]}
+            busy={busy || !video.thumbnail}
+            outputDir={outputDir}
+            onChange={(value) => setSelected((current) => ({ ...current, image: value }))}
+            onDownload={() => start("image", IMAGE_FORMATS)}
+            onCancel={onCancel}
+          />
+        )}
       </div>
 
       <button className="format-close clear" aria-label={t("card.collapse")} onClick={onDiscard}>

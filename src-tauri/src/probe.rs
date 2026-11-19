@@ -88,7 +88,12 @@ pub async fn probe(url: &str, proxy: Option<&str>) -> Result<ProbeResult, AppErr
     }
 
     let valid_ids = HashSet::new();
-    let formats = collapse_formats(&json);
+    let images = gallery_images(&json);
+    let formats = if images.is_empty() {
+        collapse_formats(&json)
+    } else {
+        Vec::new()
+    };
 
     let info = VideoInfo {
         id: json["id"].as_str().unwrap_or("").to_string(),
@@ -97,10 +102,66 @@ pub async fn probe(url: &str, proxy: Option<&str>) -> Result<ProbeResult, AppErr
         thumbnail: json["thumbnail"].as_str().map(String::from),
         uploader: json["uploader"].as_str().map(String::from),
         webpage_url: json["webpage_url"].as_str().map(String::from),
-        images: Vec::new(),
+        images,
         formats,
     };
     Ok(ProbeResult { info, valid_ids })
+}
+
+fn gallery_images(json: &Value) -> Vec<ImageOption> {
+    json["images"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .enumerate()
+        .filter_map(|(index, image)| {
+            let raw = image["url"].as_str()?;
+            let parsed = url::Url::parse(raw).ok()?;
+            if parsed.scheme() != "https" || parsed.host_str().is_none() {
+                return None;
+            }
+            let ext = parsed
+                .path()
+                .rsplit_once('.')
+                .map(|(_, extension)| extension.to_ascii_lowercase())
+                .filter(|extension| {
+                    matches!(extension.as_str(), "jpg" | "jpeg" | "png" | "webp" | "avif")
+                })
+                .unwrap_or_else(|| "webp".into());
+            Some(ImageOption {
+                id: image["id"]
+                    .as_str()
+                    .map(String::from)
+                    .unwrap_or_else(|| (index + 1).to_string()),
+                label: format!("图片 {}", index + 1),
+                url: raw.to_string(),
+                ext,
+                width: image["width"].as_u64().and_then(|n| u32::try_from(n).ok()),
+                height: image["height"].as_u64().and_then(|n| u32::try_from(n).ok()),
+            })
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::gallery_images;
+
+    #[test]
+    fn extracts_every_douyin_gallery_image() {
+        let info = serde_json::json!({
+            "images": [
+                {"id": "1", "url": "https://p95-zjwztc-sign.douyinpic.com/first.jpeg?x-expires=1797649200", "width": 1440, "height": 1920},
+                {"id": "2", "url": "https://p5-ex-gddgtc-sign.douyinpic.com/second.webp?x-expires=1797649200", "width": 1440, "height": 1920}
+            ]
+        });
+        let images = gallery_images(&info);
+        assert_eq!(images.len(), 2);
+        assert_eq!(images[0].label, "图片 1");
+        assert_eq!(images[0].ext, "jpeg");
+        assert_eq!(images[1].ext, "webp");
+        assert_eq!(images[1].width, Some(1440));
+    }
 }
 
 /// 把 yt-dlp 原始格式列表折叠成人能读懂的选项：

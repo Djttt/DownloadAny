@@ -1,8 +1,10 @@
 //! 白名单参数拼装：前端永远不接触命令行，这里把结构化选项翻译成 yt-dlp 参数。
 
 use crate::error::AppError;
+use regex::Regex;
 use std::collections::HashSet;
 use std::path::Path;
+use std::sync::OnceLock;
 
 /// 用户可选的合成格式（哨兵值，不是 yt-dlp 原生 format id）
 pub const FMT_BEST: &str = "__best__";
@@ -57,6 +59,49 @@ pub fn validate_url(url: &str) -> Result<(), AppError> {
         return Err(AppError::InvalidUrl);
     }
     Ok(())
+}
+
+/// 从单独 URL 或 App“复制链接”分享文案中提取第一个 HTTP(S) 链接。
+/// 同时兼容部分平台复制出来的 `https\://` 形式。
+pub fn extract_url(raw: &str) -> Result<String, AppError> {
+    static URL_RE: OnceLock<Regex> = OnceLock::new();
+    let re = URL_RE.get_or_init(|| {
+        Regex::new(r#"(?i)https?\\?://[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+"#)
+            .expect("source URL regex must compile")
+    });
+    let matched = re.find(raw.trim()).ok_or(AppError::InvalidUrl)?.as_str();
+    let normalized = matched
+        .replacen(r"\://", "://", 1)
+        .trim_end_matches(|c: char| {
+            matches!(
+                c,
+                '.' | ','
+                    | ';'
+                    | ':'
+                    | '!'
+                    | '?'
+                    | '"'
+                    | '\''
+                    | ')'
+                    | ']'
+                    | '}'
+                    | '>'
+                    | '。'
+                    | '，'
+                    | '；'
+                    | '：'
+                    | '！'
+                    | '？'
+                    | '”'
+                    | '’'
+                    | '》'
+                    | '〉'
+                    | '】'
+            )
+        })
+        .to_string();
+    validate_url(&normalized)?;
+    Ok(normalized)
 }
 
 /// 代理 URL 白名单：只放行常见代理 scheme（scheme 前缀天然杜绝"值被当作选项"的注入）
@@ -281,6 +326,19 @@ mod tests {
         assert!(validate_url("file:///etc/passwd").is_err());
         assert!(validate_url("https://a b").is_err());
         assert!(validate_url("--help").is_err());
+    }
+
+    #[test]
+    fn extracts_url_from_douyin_share_caption() {
+        let raw = r#"0.25 复制打开抖音，看看【戴同学啥都玩的作品】GTA6终于来了！ https\://v.douyin.com/srtHFDRu7Bk/ W@z.TL :7pm 12/06 ATL:/&#x20;"#;
+        assert_eq!(
+            extract_url(raw).unwrap(),
+            "https://v.douyin.com/srtHFDRu7Bk/"
+        );
+        assert_eq!(
+            extract_url("https://www.bilibili.com/video/BV1xx").unwrap(),
+            "https://www.bilibili.com/video/BV1xx"
+        );
     }
 
     #[test]

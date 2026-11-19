@@ -258,9 +258,9 @@ impl AppState {
 pub async fn enqueue(
     app: &AppHandle,
     state: &AppState,
-    opts: DownloadOptions,
+    mut opts: DownloadOptions,
 ) -> Result<u64, AppError> {
-    args::validate_url(&opts.url)?;
+    opts.url = args::extract_url(&opts.url)?;
     args::validate_proxy(opts.proxy.as_deref())?;
     state.validate_format(&opts.url, &opts.format_id)?;
     tokio::fs::create_dir_all(&opts.output_dir).await?;

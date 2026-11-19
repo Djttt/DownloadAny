@@ -133,8 +133,7 @@ impl AgentTools {
         &self,
         Parameters(p): Parameters<ProbeArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let url = p.url.trim().to_string();
-        args::validate_url(&url).map_err(internal_err)?;
+        let url = args::extract_url(&p.url).map_err(internal_err)?;
         let proxy = self.resolve_proxy(&url, p.proxy.as_deref())?;
         let info = self.probe_local_and_cache(&url, proxy.as_deref()).await?;
         self.remember_proxy(&url, proxy.as_ref());
@@ -165,8 +164,7 @@ impl AgentTools {
         &self,
         Parameters(p): Parameters<StartArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let url = p.url.trim().to_string();
-        args::validate_url(&url).map_err(internal_err)?;
+        let url = args::extract_url(&p.url).map_err(internal_err)?;
         let format_id = p.format_id.unwrap_or_else(|| args::FMT_BEST.to_string());
         let proxy = self.resolve_proxy(&url, p.proxy.as_deref())?;
         if self.state.probe_meta(&url).is_none() {

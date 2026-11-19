@@ -75,6 +75,7 @@ export function AuthModal({
   }
 
   function passwordRow(
+    fieldId: string,
     label: string,
     placeholder: string,
     autoComplete: string,
@@ -85,9 +86,9 @@ export function AuthModal({
     action?: { label: string; onClick: () => void },
   ) {
     return (
-      <label className="auth-field">
+      <div className="auth-field">
         <span className="auth-field-head">
-          <span>{label}</span>
+          <label htmlFor={fieldId}>{label}</label>
           {action && (
             <button
               type="button"
@@ -102,7 +103,7 @@ export function AuthModal({
           )}
         </span>
         <span className="auth-pwd">
-          <input type={revealed ? "text" : "password"} value={value} disabled={busy} autoComplete={autoComplete} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+          <input id={fieldId} type={revealed ? "text" : "password"} value={value} disabled={busy} autoComplete={autoComplete} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
           <button
             type="button"
             className="pwd-eye"
@@ -115,7 +116,7 @@ export function AuthModal({
             <EyeIcon off={revealed} />
           </button>
         </span>
-      </label>
+      </div>
     );
   }
 
@@ -294,6 +295,7 @@ export function AuthModal({
           {(view === "login" || view === "forgot") && (
             <>
               {passwordRow(
+                view === "forgot" ? "forgot-password" : "login-password",
                 view === "forgot" ? t("auth.newPassword") : t("auth.password"),
                 view === "forgot" ? t("auth.newPasswordPlaceholder") : t("auth.passwordPlaceholder"),
                 view === "forgot" ? "new-password" : "current-password",
@@ -314,6 +316,7 @@ export function AuthModal({
           {view === "register" && (
             <>
               {passwordRow(
+                "register-password",
                 t("auth.password"),
                 t("auth.passwordPlaceholder"),
                 "new-password",
@@ -323,6 +326,7 @@ export function AuthModal({
                 setPassword,
               )}
               {passwordRow(
+                "register-confirm-password",
                 t("pwd.confirmLabel"),
                 t("pwd.confirmPlaceholder"),
                 "new-password",
@@ -336,6 +340,7 @@ export function AuthModal({
           {view === "forgot" && (
             <>
               {passwordRow(
+                "forgot-confirm-password",
                 t("pwd.confirmLabel"),
                 t("pwd.confirmPlaceholder"),
                 "new-password",
