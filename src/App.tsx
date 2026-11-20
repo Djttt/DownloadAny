@@ -334,7 +334,7 @@ function App() {
               if (autoCancelRequested.current) continue;
               const id = await enqueue(
                 info.formats[0],
-                info.webpageUrl || url,
+                url,
                 info.title,
                 info.id,
               );
@@ -599,7 +599,8 @@ function App() {
                   outputDir={outputDir}
                   jobs={jobs}
                   onDownload={async (format, urlOverride, titleSuffix) => {
-                    const targetUrl = urlOverride || item.info.webpageUrl || item.url;
+                    // 下载沿用探测 URL：webpageUrl 可能是站点跳转后的地址，未登记格式缓存。
+                    const targetUrl = urlOverride || item.url;
                     const title = titleSuffix ? `${item.info.title} - ${titleSuffix}` : item.info.title;
                     if (urlOverride) {
                       await cacheProbeResult(targetUrl, {
