@@ -72,7 +72,7 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
         <div className="video-summary">
           {video.thumbnail && (
             <div className="video-thumb-wrap">
-              <img className="thumb" src={video.thumbnail} alt="" referrerPolicy="no-referrer" />
+              <img className="thumb" src={video.thumbnailPreview || video.thumbnail} alt="" referrerPolicy="no-referrer" />
               {video.duration != null && <span className="video-duration">{fmtDuration(video.duration)}</span>}
             </div>
           )}

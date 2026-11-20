@@ -3,6 +3,7 @@
 use crate::{args, embedded_components, error::AppError, resolve};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use base64::Engine;
 use std::collections::HashSet;
 use std::process::Stdio;
 use std::time::Duration;
@@ -35,6 +36,8 @@ pub struct VideoInfo {
     pub title: String,
     pub duration: Option<f64>,
     pub thumbnail: Option<String>,
+    #[serde(default)]
+    pub thumbnail_preview: Option<String>,
     pub uploader: Option<String>,
     pub webpage_url: Option<String>,
     #[serde(default)]
@@ -95,17 +98,61 @@ pub async fn probe(url: &str, proxy: Option<&str>) -> Result<ProbeResult, AppErr
         Vec::new()
     };
 
+    let thumbnail = json["thumbnail"].as_str().map(String::from);
+    let thumbnail_preview = match thumbnail.as_deref() {
+        Some(url) => weibo_thumbnail_preview(url, proxy).await,
+        None => None,
+    };
     let info = VideoInfo {
         id: json["id"].as_str().unwrap_or("").to_string(),
         title: json["title"].as_str().unwrap_or("(无标题)").to_string(),
         duration: json["duration"].as_f64(),
-        thumbnail: json["thumbnail"].as_str().map(String::from),
+        thumbnail,
+        thumbnail_preview,
         uploader: json["uploader"].as_str().map(String::from),
         webpage_url: json["webpage_url"].as_str().map(String::from),
         images,
         formats,
     };
     Ok(ProbeResult { info, valid_ids })
+}
+
+// 新浪图片防盗链要求微博 Referer，WebView 的 img 无法设置这个请求头。
+// 预览失败不影响视频解析；原始 thumbnail 仍保留给封面下载。
+async fn weibo_thumbnail_preview(raw: &str, proxy: Option<&str>) -> Option<String> {
+    let parsed = url::Url::parse(raw).ok()?;
+    let host = parsed.host_str()?;
+    if parsed.scheme() != "https" || !(host == "sinaimg.cn" || host.ends_with(".sinaimg.cn")) {
+        return None;
+    }
+    let mut builder = reqwest::Client::builder()
+        .timeout(Duration::from_secs(8));
+    if let Some(proxy) = proxy {
+        builder = builder.proxy(reqwest::Proxy::all(proxy).ok()?);
+    }
+    let mut response = builder.build().ok()?
+        .get(raw)
+        .header(reqwest::header::REFERER, "https://weibo.com/")
+        .header(reqwest::header::USER_AGENT, "Mozilla/5.0")
+        .send().await.ok()?.error_for_status().ok()?;
+    let mime = response.headers().get(reqwest::header::CONTENT_TYPE)?
+        .to_str().ok()?.split(';').next()?.trim().to_string();
+    if !matches!(mime.as_str(), "image/jpeg" | "image/png" | "image/webp" | "image/gif") {
+        return None;
+    }
+    const MAX_BYTES: usize = 8 * 1024 * 1024;
+    if response.content_length().is_some_and(|size| size > MAX_BYTES as u64) {
+        return None;
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.ok()? {
+        if bytes.len() + chunk.len() > MAX_BYTES {
+            return None;
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    if bytes.is_empty() { return None; }
+    Some(format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
 }
 
 fn gallery_images(json: &Value) -> Vec<ImageOption> {
@@ -145,7 +192,7 @@ fn gallery_images(json: &Value) -> Vec<ImageOption> {
 
 #[cfg(test)]
 mod tests {
-    use super::gallery_images;
+    use super::{gallery_images, resolution_label};
 
     #[test]
     fn extracts_every_douyin_gallery_image() {
@@ -161,6 +208,29 @@ mod tests {
         assert_eq!(images[0].ext, "jpeg");
         assert_eq!(images[1].ext, "webp");
         assert_eq!(images[1].width, Some(1440));
+    }
+
+    #[test]
+    fn uses_compact_k_labels_for_desktop_quality_options() {
+        assert_eq!(resolution_label(1080), "1080p");
+        assert_eq!(resolution_label(1440), "2K");
+        assert_eq!(resolution_label(1620), "3K");
+        assert_eq!(resolution_label(1728), "3K");
+        assert_eq!(resolution_label(1800), "3K");
+        assert_eq!(resolution_label(2160), "4K");
+        assert_eq!(resolution_label(4320), "8K");
+        assert_eq!(resolution_label(720), "720p");
+        assert_eq!(resolution_label(480), "480p");
+    }
+}
+
+fn resolution_label(height: u32) -> String {
+    match height {
+        1440 => "2K".into(),
+        1620 | 1728 | 1800 => "3K".into(),
+        2160 => "4K".into(),
+        4320 => "8K".into(),
+        _ => format!("{height}p"),
     }
 }
 
@@ -218,7 +288,7 @@ fn collapse_formats(json: &Value) -> Vec<FormatOption> {
     for (height, filesize) in resolutions.into_iter().rev().take(8) {
         out.push(FormatOption {
             id: format!("__video_{}p__", height),
-            label: format!("{}p", height),
+            label: resolution_label(height),
             height: Some(height),
             ext: None,
             filesize: (filesize > 0).then_some(filesize.saturating_add(best_audio_filesize)),

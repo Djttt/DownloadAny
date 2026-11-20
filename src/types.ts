@@ -22,6 +22,7 @@ export interface VideoInfo {
   title: string;
   duration?: number | null;
   thumbnail?: string | null;
+  thumbnailPreview?: string | null;
   uploader?: string | null;
   webpageUrl?: string | null;
   images?: ImageOption[];
