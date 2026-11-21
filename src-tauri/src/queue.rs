@@ -6,6 +6,7 @@ use crate::error::{AppError, JobStatus};
 use crate::probe;
 use crate::progress::{self, ProgressUpdate};
 use crate::resolve;
+use crate::xiaohongshu;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::process::Stdio;
@@ -260,16 +261,20 @@ pub async fn enqueue(
     state: &AppState,
     mut opts: DownloadOptions,
 ) -> Result<u64, AppError> {
-    opts.url = args::extract_url(&opts.url)?;
+    let requested = args::extract_url(&opts.url)?;
     args::validate_proxy(opts.proxy.as_deref())?;
-    state.validate_format(&opts.url, &opts.format_id)?;
+    // 与探测同一个还原入口：白名单按还原后的直链登记，yt-dlp 也只认这条；
+    // 会话内已有映射，不会再发一次网络请求，也不会出现两次还原结果不一致。
+    let target = xiaohongshu::resolve_for_playback(&requested, opts.proxy.as_deref()).await?;
+    state.validate_format(&target, &opts.format_id)?;
     tokio::fs::create_dir_all(&opts.output_dir).await?;
 
     let id = state.inner.next_id.fetch_add(1, Ordering::SeqCst) + 1;
     let record = JobRecord {
         id,
-        url: opts.url.clone(),
-        title: opts.title.clone().unwrap_or_else(|| opts.url.clone()),
+        // 任务/历史里保留用户输入的那条链接（重试时同样按短链再查映射）
+        url: requested.clone(),
+        title: opts.title.clone().unwrap_or_else(|| requested.clone()),
         format_id: opts.format_id.clone(),
         format_label: opts
             .format_label
@@ -289,6 +294,8 @@ pub async fn enqueue(
 
     emit_status(app, &record);
 
+    // 进程实际拉取的是还原后的直链，与探测时用的是同一条
+    opts.url = target;
     let app2 = app.clone();
     let state2 = state.clone();
     tokio::spawn(async move { run_job(app2, state2, id, opts).await });
@@ -581,16 +588,32 @@ fn extract_destination(line: &str) -> Option<String> {
     None
 }
 
+/// 把探测结果登记到"用户输入"与"实际拉取地址"两个键上。
+/// 短链场景下两者不同：界面与 MCP 继续用用户输入的那条查白名单，
+/// 而喂给 yt-dlp 的是还原后的直链。
+pub fn cache_probe_aliases(state: &AppState, requested: &str, target: &str, info: ProbedInfo) {
+    if target != requested {
+        state.cache_probe(requested, info.clone());
+    }
+    state.cache_probe(target, info);
+}
+
 /// probe 的薄封装：探测并把 format_id 集合存入白名单缓存
 pub async fn probe_and_cache(
     url: &str,
     proxy: Option<&str>,
     state: &AppState,
 ) -> Result<probe::VideoInfo, AppError> {
-    let result = probe::probe(url, proxy).await?;
+    // 小红书 xhslink 短链不在 yt-dlp 识别范围（跟着重定向只会撞到 /login 墙），
+    // 先还原成笔记直链再探测——与后端 /parse、/resolve 的预处理同源。
+    // 探测入口强制重新跟随：重解析就是用户取新鲜 xsec_token 的手段。
+    let target = xiaohongshu::resolve_for_probe(url, proxy).await?;
+    let result = probe::probe(&target, proxy).await?;
     let info = result.info;
-    state.cache_probe(
+    cache_probe_aliases(
+        state,
         url,
+        &target,
         ProbedInfo {
             valid_ids: result.valid_ids,
             title: info.title.clone(),
@@ -603,6 +626,39 @@ pub async fn probe_and_cache(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn probe_cache_is_reachable_by_input_and_resolved_url() {
+        let state = AppState::new();
+        let short = "https://xhslink.cn/o/8bQrEKxb2wT";
+        let note = "https://www.xiaohongshu.com/discovery/item/6af9738d00000000090214ed?xsec_token=x";
+        cache_probe_aliases(
+            &state,
+            short,
+            note,
+            ProbedInfo {
+                valid_ids: HashSet::new(),
+                title: "标题".into(),
+                formats: vec![],
+            },
+        );
+        // 界面/MCP 拿的是用户输入的短链，yt-dlp 只认还原后的笔记直链，两个键都要能查到
+        assert!(state.probe_meta(short).is_some());
+        assert!(state.probe_meta(note).is_some());
+        assert_eq!(state.inner.probed.lock().unwrap().len(), 2);
+
+        cache_probe_aliases(
+            &state,
+            "https://example.com/v",
+            "https://example.com/v",
+            ProbedInfo {
+                valid_ids: HashSet::new(),
+                title: "标题".into(),
+                formats: vec![],
+            },
+        );
+        assert_eq!(state.inner.probed.lock().unwrap().len(), 3);
+    }
 
     #[test]
     fn probe_meta_roundtrip_and_validate() {
