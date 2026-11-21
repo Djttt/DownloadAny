@@ -17,6 +17,7 @@ import { changePassword, logout, type AuthUser } from "../lib/auth";
 import type { AppUpdater } from "../lib/updater";
 import { EyeIcon } from "./EyeIcon";
 import { Icon } from "./Icon";
+import { trackAnalyticsEvent } from "../lib/analytics";
 
 /* ========================================================================
  * 侧栏功能菜单:联系客服(QQ 群二维码弹窗)/ 问题反馈(弹窗)/ 设置(弹窗)
@@ -590,12 +591,14 @@ export function SettingsModal({
   const [themePref, setThemePrefState] = useState<ThemePref>(getThemePref());
 
   function changeLang(p: LangPref) {
+    if (p !== langPref) void trackAnalyticsEvent("setting_changed", { formatId: "language", formatLabel: p });
     setLangPrefState(p);
     setLangPref(p);
     saveLangPref(p).catch(() => {});
   }
 
   function changeTheme(p: ThemePref) {
+    if (p !== themePref) void trackAnalyticsEvent("setting_changed", { formatId: "theme", formatLabel: p });
     setThemePrefState(p);
     setThemePref(p);
     saveThemePref(p).catch(() => {});

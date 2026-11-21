@@ -1,4 +1,4 @@
-import { analyticsContext } from "./analytics";
+import { analyticsContext, trackAnalyticsEvent } from "./analytics";
 import { currentAccessToken } from "./auth";
 
 const API_BASE =
@@ -34,4 +34,5 @@ export async function submitFeedback(kind: "bug" | "feature", text: string): Pro
     }),
   });
   if (!response.ok) throw new FeedbackError(response.status);
+  void trackAnalyticsEvent("feedback_submitted", { formatId: kind });
 }

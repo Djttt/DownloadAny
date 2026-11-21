@@ -6,6 +6,7 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.repl
   ?? "http://127.0.0.1:8000";
 const DEVICE_ID_KEY = "analyticsDeviceId";
 const CLIENT_SESSION_ID = crypto.randomUUID();
+const onceEvents = new Set<AnalyticsEventType>();
 
 export type AnalyticsEventType =
   | "app_open"
@@ -15,7 +16,16 @@ export type AnalyticsEventType =
   | "download_started"
   | "download_completed"
   | "download_failed"
-  | "download_cancelled";
+  | "download_cancelled"
+  | "screen_view"
+  | "dialog_opened"
+  | "setting_changed"
+  | "parse_blocked"
+  | "login_succeeded"
+  | "signup_succeeded"
+  | "feedback_submitted"
+  | "download_cancel_requested"
+  | "download_enqueue_failed";
 
 export interface AnalyticsEventData {
   mediaId?: string;
@@ -34,14 +44,27 @@ interface AnalyticsContext {
 
 let contextPromise: Promise<AnalyticsContext> | null = null;
 
+/** 一次运行只记录一次启动，避免 React StrictMode 重放副作用导致重复。 */
+export function trackAnalyticsEventOnce(eventType: AnalyticsEventType): void {
+  if (onceEvents.has(eventType)) return;
+  onceEvents.add(eventType);
+  void trackAnalyticsEvent(eventType);
+}
+
 export function analyticsContext(): Promise<AnalyticsContext> {
   if (contextPromise) return contextPromise;
   contextPromise = (async () => {
-    const settings = await load("settings.json", { autoSave: true });
-    let deviceId = await settings.get<string>(DEVICE_ID_KEY);
-    if (!deviceId) {
-      deviceId = crypto.randomUUID();
-      await settings.set(DEVICE_ID_KEY, deviceId);
+    let deviceId: string = crypto.randomUUID();
+    try {
+      const settings = await load("settings.json", { autoSave: true });
+      const saved = await settings.get<string>(DEVICE_ID_KEY);
+      if (saved && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(saved)) {
+        deviceId = saved;
+      } else {
+        await settings.set(DEVICE_ID_KEY, deviceId);
+      }
+    } catch {
+      // 存储不可用时使用本次运行的临时标识。
     }
     const appVersion = await getVersion().catch(() => "");
     return { deviceId, appVersion, platform: navigator.platform || "unknown" };
@@ -74,8 +97,7 @@ export async function trackAnalyticsEvent(
         app_version: context.appVersion,
         platform: context.platform,
         media_id: data.mediaId,
-        media_title: data.mediaTitle,
-        media_url: data.mediaUrl,
+        media_url: data.mediaUrl ? new URL(data.mediaUrl).origin + "/" : undefined,
         format_id: data.formatId,
         format_label: data.formatLabel,
         error: data.error?.slice(0, 2000),

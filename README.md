@@ -2,6 +2,20 @@
 
 基于 **Tauri v2 + yt-dlp** 的跨平台桌面视频下载器（Windows / macOS / Linux）。
 
+## 用户行为统计
+
+通过 `/api/analytics/events` 最佳努力上报，复用安装设备 ID 和运行会话 ID，携带应用版本、操作系统及可用的登录凭证。上报失败不会阻塞操作。
+
+- 启动：`app_open`，每次运行只上报一次；页面切换：`screen_view`（download/history/agent）。
+- 功能弹窗：`dialog_opened`（settings/feedback/auth）；登录注册成功：`login_succeeded` / `signup_succeeded`。
+- 设置操作：`setting_changed`，记录自动模式、并发数、代理类型、语言、主题或选择下载目录，不记录目录和代理地址。
+- 解析：保留 `parse_requested/succeeded/failed`，登录拦截单独记录为 `parse_blocked`。
+- 下载：保留开始、成功、失败、取消状态；用户取消操作记录为 `download_cancel_requested`，入队失败记录为 `download_enqueue_failed`。
+- 反馈成功：`feedback_submitted`，只记录 bug/feature 类型。
+
+媒体链接只上报域名，不上报媒体标题；解析和任务错误只上报分类。页面访问与功能弹窗按状态变化记录，避免 React StrictMode 重放导致重复。
+这些是客户端尽力上报的行为数据，可能受断网影响，不等同于服务端权威运行指标。
+
 ## Google 登录
 
 桌面端使用系统浏览器完成 Google OAuth，并通过本机临时回环地址返回应用。请在

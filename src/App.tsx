@@ -35,10 +35,10 @@ import {
 } from "./lib/settings";
 import { setLangPref, t, useLang } from "./lib/i18n";
 import { setThemePref } from "./lib/theme";
-import { analyticsContext, trackAnalyticsEvent } from "./lib/analytics";
+import { analyticsContext, trackAnalyticsEvent, trackAnalyticsEventOnce } from "./lib/analytics";
 import { loadDownloadHistory, removeDownloadHistory, saveDownloadHistory } from "./lib/history";
 import { restoreUser, type AuthUser } from "./lib/auth";
-import { describeError, singleErrorBanner, type ErrorBanner } from "./lib/errorHint";
+import { classifyError, describeError, singleErrorBanner, type ErrorBanner } from "./lib/errorHint";
 import { useAppUpdater } from "./lib/updater";
 import { Icon } from "./components/Icon";
 import { UrlBar } from "./components/UrlBar";
@@ -93,6 +93,9 @@ function App() {
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
+  const trackedView = useRef<string | null>(null);
+  const trackedDialog = useRef<string | null>(null);
+  const trackedAuthOpen = useRef(false);
   const pendingParse = useRef<string[] | null>(null);
   const [message, setMessage] = useState<AppMessage | null>(null);
   const messageTimer = useRef(0);
@@ -119,6 +122,25 @@ function App() {
   }, []);
 
   useEffect(() => () => window.clearTimeout(messageTimer.current), []);
+
+  useEffect(() => { trackAnalyticsEventOnce("app_open"); }, []);
+
+  useEffect(() => {
+    if (trackedView.current === view) return;
+    trackedView.current = view;
+    void trackAnalyticsEvent("screen_view", { formatId: view });
+  }, [view]);
+
+  useEffect(() => {
+    if (trackedDialog.current === dialog) return;
+    trackedDialog.current = dialog;
+    if (dialog) void trackAnalyticsEvent("dialog_opened", { formatId: dialog });
+  }, [dialog]);
+
+  useEffect(() => {
+    if (authOpen && !trackedAuthOpen.current) void trackAnalyticsEvent("dialog_opened", { formatId: "auth" });
+    trackedAuthOpen.current = authOpen;
+  }, [authOpen]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -166,7 +188,6 @@ function App() {
           analyticsJobs.current = Object.fromEntries(existing.map((job) => [job.id, job]));
         }
         await setMaxConcurrency(conc); // 把持久化的偏好推给 Rust 队列
-        void trackAnalyticsEvent("app_open");
       } catch (e) {
         console.error(e);
       }
@@ -218,7 +239,7 @@ function App() {
           mediaUrl: job.url,
           formatId: job.formatId,
           formatLabel: job.formatLabel,
-          error: s.error ?? undefined,
+          error: s.error ? classifyError(s.error) : undefined,
         });
       }
     }));
@@ -297,6 +318,7 @@ function App() {
     const activeUser = await restoreUser();
     setUser(activeUser);
     if (!activeUser) {
+      void trackAnalyticsEvent("parse_blocked", { error: "login_required" });
       pendingParse.current = urls;
       showMessage(t("auth.loginToParse"), "info");
       setAuthOpen(true);
@@ -350,7 +372,7 @@ function App() {
               setVideos((current) => [...current, item].sort((a, b) => a.order - b.order));
             }
           } catch (e) {
-            void trackAnalyticsEvent("parse_failed", { mediaUrl: url, error: String(e) });
+            void trackAnalyticsEvent("parse_failed", { mediaUrl: url, error: classifyError(String(e)) });
             failures.push({ url, raw: String(e) });
           }
         }
@@ -405,6 +427,7 @@ function App() {
       setView("download");
       return id;
     } catch (e) {
+      void trackAnalyticsEvent("download_enqueue_failed", { mediaUrl: url, error: classifyError(String(e)) });
       setError(singleErrorBanner(String(e), "download"));
     }
   }
@@ -412,18 +435,21 @@ function App() {
   async function pickDir() {
     const sel = await open({ directory: true, defaultPath: outputDir, title: t("dir.pickerTitle") });
     if (typeof sel === "string") {
+      void trackAnalyticsEvent("setting_changed", { formatId: "output_directory" });
       setOutputDir(sel);
       saveOutputDir(sel).catch(console.error);
     }
   }
 
   function toggleAuto(v: boolean) {
+    if (v !== autoMode) void trackAnalyticsEvent("setting_changed", { formatId: "auto_mode", formatLabel: String(v) });
     setAutoMode(v);
     saveAutoMode(v).catch(console.error);
   }
 
   /** 代理偏好：状态 → 持久化；下次本地下载即生效（invoke 时现取 proxyUrl） */
   function applyProxy(type: ProxyType, addr: string) {
+    if (type !== proxyType) void trackAnalyticsEvent("setting_changed", { formatId: "proxy_type", formatLabel: type });
     setProxyTypeState(type);
     setProxyAddrState(addr);
     saveProxyType(type).catch(() => {});
@@ -433,6 +459,7 @@ function App() {
   /** 并发上限：钳制 → 状态 → 持久化 → 推给 Rust 立即生效 */
   function applyMaxConcurrency(n: number) {
     const v = Math.min(CONCURRENCY_MAX, Math.max(CONCURRENCY_MIN, n));
+    if (v !== maxConcurrency) void trackAnalyticsEvent("setting_changed", { formatId: "max_concurrency", formatLabel: String(v) });
     setMaxConcurrencyState(v);
     saveMaxConcurrency(v).catch(console.error);
     setMaxConcurrency(v).catch(console.error);
@@ -445,6 +472,7 @@ function App() {
       const status = jobs[id]?.status;
       return status === "queued" || status === "running";
     });
+    if (activeIds.length) void trackAnalyticsEvent("download_cancel_requested", { formatId: "batch" });
     await Promise.all(activeIds.map((id) => cancelDownload(id).catch(() => {})));
     setAutoCancelling(false);
   }
@@ -637,6 +665,7 @@ function App() {
             pendingParse.current = null;
           }}
           onAuthenticated={(authenticatedUser, signedUp) => {
+            void trackAnalyticsEvent(signedUp ? "signup_succeeded" : "login_succeeded");
             setUser(authenticatedUser);
             showMessage(signedUp ? t("auth.registerSuccess") : t("auth.loginSuccess"), "success");
             const urls = pendingParse.current;
@@ -666,6 +695,7 @@ function App() {
   );
 
   function cancel(id: number) {
+    void trackAnalyticsEvent("download_cancel_requested", { formatId: "single" });
     cancelDownload(id).catch((e) => setError(singleErrorBanner(String(e), "download")));
   }
 
