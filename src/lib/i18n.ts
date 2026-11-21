@@ -7,6 +7,14 @@ export type Lang = "zh" | "en";
 export type LangPref = "system" | Lang;
 
 const zh = {
+  "notice.region": "消息通知",
+  "notice.info": "提示",
+  "notice.success": "操作成功",
+  "notice.error": "操作未完成",
+  "notice.details": "查看详情",
+  "notice.parseSuccess": "解析成功",
+  "notice.parseFailed": "解析失败",
+  "notice.parsedCount": "已解析 {n} 个链接。",
   // 侧栏
   "nav.mainAria": "主导航",
   "nav.download": "下载",
@@ -156,6 +164,9 @@ const zh = {
   "platform.introTitle": "支持主流音视频平台",
   "platform.introDesc": "粘贴视频链接，即可解析并下载",
   "platform.bilibili": "哔哩哔哩",
+  "platform.douyin": "抖音",
+  "platform.toutiao": "今日头条",
+  "platform.wechatChannels": "微信视频号",
   "platform.xiaohongshu": "小红书",
   "platform.netease": "网易云音乐",
   "platform.weibo": "微博",
@@ -277,6 +288,14 @@ const zh = {
 export type TKey = keyof typeof zh;
 
 const en: Record<TKey, string> = {
+  "notice.region": "Notifications",
+  "notice.info": "Information",
+  "notice.success": "Success",
+  "notice.error": "Action unsuccessful",
+  "notice.details": "View details",
+  "notice.parseSuccess": "Parsing complete",
+  "notice.parseFailed": "Parsing failed",
+  "notice.parsedCount": "Parsed {n} link(s).",
   "nav.mainAria": "Main navigation",
   "nav.download": "Downloads",
   "nav.history": "History",
@@ -417,6 +436,9 @@ const en: Record<TKey, string> = {
   "platform.introTitle": "Supports major video & music platforms",
   "platform.introDesc": "Paste a video link to parse and download",
   "platform.bilibili": "Bilibili",
+  "platform.douyin": "Douyin",
+  "platform.toutiao": "Toutiao",
+  "platform.wechatChannels": "WeChat Channels",
   "platform.xiaohongshu": "Xiaohongshu",
   "platform.netease": "NetEase Cloud Music",
   "platform.weibo": "Weibo",

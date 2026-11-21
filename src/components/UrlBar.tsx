@@ -5,7 +5,6 @@ import {
   type MouseEvent,
 } from "react";
 import { t } from "../lib/i18n";
-import { type ErrorBanner } from "../lib/errorHint";
 import { Icon } from "./Icon";
 
 interface Props {
@@ -14,7 +13,6 @@ interface Props {
   autoMode: boolean;
   downloadProgress?: number | null;
   cancelling?: boolean;
-  error: ErrorBanner | null;
   onValueChange: (value: string) => void;
   onSubmit: (urls: string[]) => void;
   onCancelDownload?: () => void;
@@ -27,7 +25,6 @@ export function UrlBar({
   autoMode,
   downloadProgress,
   cancelling,
-  error,
   onValueChange,
   onSubmit,
   onCancelDownload,
@@ -165,27 +162,6 @@ export function UrlBar({
           </button>
         )}
       </div>
-      {error && (
-        <div className="url-error" role="alert">
-          <div className="summary">{error.summary}</div>
-          {error.items.map((item, i) => (
-            <div className="item" key={`${item.label ?? "e"}-${i}`}>
-              {item.label && (
-                <div className="link" title={item.label}>
-                  {item.label}
-                </div>
-              )}
-              {item.message && <div className="msg">{item.message}</div>}
-              {item.raw && (
-                <details>
-                  <summary>{t("err.rawToggle")}</summary>
-                  <pre>{item.raw}</pre>
-                </details>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
     </form>
   );
 }

@@ -10,13 +10,14 @@ import pinterest from "../assets/Pinterest.svg";
 import reddit from "../assets/Reddit.svg";
 import snapchat from "../assets/Snapchat.svg";
 import soundCloud from "../assets/SoundCloud.svg";
-import spotify from "../assets/Spotify.svg";
+import douyin from "../assets/Douyin.svg";
+import toutiao from "../assets/Toutiao.svg";
+import wechatChannels from "../assets/WechatChannels.svg";
 import suno from "../assets/Suno.svg";
 import threads from "../assets/Threads.svg";
 import tiktok from "../assets/TikTok.svg";
 import tumblr from "../assets/Tumblr.svg";
 import twitch from "../assets/Twitch.svg";
-import twitter from "../assets/Twitter.svg";
 import vimeo from "../assets/Vimeo.svg";
 import vk from "../assets/VK.svg";
 import weibo from "../assets/Weibo.svg";
@@ -38,18 +39,19 @@ interface PlatformEntry {
 const platforms: PlatformEntry[] = [
   { id: "youtube", name: "YouTube", logo: youtube },
   { id: "bilibili", nameKey: "platform.bilibili", logo: bilibili },
+  { id: "douyin", nameKey: "platform.douyin", logo: douyin },
   { id: "tiktok", name: "TikTok", logo: tiktok },
   { id: "xiaohongshu", nameKey: "platform.xiaohongshu", logo: xiaohongshu },
+  { id: "wechat-channels", nameKey: "platform.wechatChannels", logo: wechatChannels },
+  { id: "toutiao", nameKey: "platform.toutiao", logo: toutiao },
   { id: "instagram", name: "Instagram", logo: instagram },
   { id: "facebook", name: "Facebook", logo: facebook },
-  { id: "twitter", name: "Twitter", logo: twitter },
   { id: "x", name: "X", logo: xTwitter },
   { id: "threads", name: "Threads", logo: threads },
   { id: "twitch", name: "Twitch", logo: twitch },
   { id: "vimeo", name: "Vimeo", logo: vimeo },
   { id: "dailymotion", name: "Dailymotion", logo: dailymotion },
   { id: "soundcloud", name: "SoundCloud", logo: soundCloud },
-  { id: "spotify", name: "Spotify", logo: spotify },
   { id: "netease", nameKey: "platform.netease", logo: neteaseCloudMusic },
   { id: "suno", name: "Suno", logo: suno },
   { id: "reddit", name: "Reddit", logo: reddit },

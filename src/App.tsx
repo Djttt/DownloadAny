@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { FormatOption, JobRecord, VideoInfo } from "./types";
 import {
@@ -47,6 +47,7 @@ import { AuthModal } from "./components/AuthModal";
 import { FormatBar } from "./components/VideoCard";
 import { QueueList } from "./components/QueueList";
 import { PlatformWall } from "./components/PlatformWall";
+import { Notifications, type AppNotice } from "./components/Notifications";
 import {
   AccountMenuItem,
   FeedbackModal,
@@ -62,14 +63,14 @@ const TERMINAL: JobRecord["status"][] = ["completed", "failed", "cancelled"];
 type View = "download" | "history" | "agent";
 type Dialog = "feedback" | "settings";
 type ParsedVideo = { key: string; order: number; url: string; info: VideoInfo };
-type AppMessage = { id: number; text: string; type: "success" | "error" | "info" };
 
 function App() {
   useLang(); // 订阅语言切换：偏好变化时整树重渲染
   const [videos, setVideos] = useState<ParsedVideo[]>([]);
   const [urlInput, setUrlInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<ErrorBanner | null>(null);
+  const [notices, setNotices] = useState<AppNotice[]>([]);
+  const noticeId = useRef(0);
   const [jobs, setJobs] = useState<Record<number, JobRecord>>({});
   const [historyJobs, setHistoryJobs] = useState<JobRecord[]>([]);
   const [outputDir, setOutputDir] = useState("");
@@ -97,16 +98,23 @@ function App() {
   const trackedDialog = useRef<string | null>(null);
   const trackedAuthOpen = useRef(false);
   const pendingParse = useRef<string[] | null>(null);
-  const [message, setMessage] = useState<AppMessage | null>(null);
-  const messageTimer = useRef(0);
   const updater = useAppUpdater(
     Object.values(jobs).some((job) => job.status === "queued" || job.status === "running"),
   );
 
-  function showMessage(text: string, type: AppMessage["type"]) {
-    window.clearTimeout(messageTimer.current);
-    setMessage({ id: Date.now(), text, type });
-    messageTimer.current = window.setTimeout(() => setMessage(null), 4500);
+  function addNotice(notice: Omit<AppNotice, "id">) {
+    const entry = { ...notice, id: ++noticeId.current };
+    setNotices((current) => [...current, entry].slice(-4));
+  }
+
+  const removeNotice = useCallback((id: number) => setNotices((current) => current.filter((notice) => notice.id !== id)), []);
+
+  function showMessage(text: string, type: AppNotice["type"]) {
+    addNotice({ type, title: t(type === "error" ? "notice.error" : type === "success" ? "notice.success" : "notice.info"), text });
+  }
+
+  function showError(error: ErrorBanner, title = t("notice.error")) {
+    addNotice({ type: "error", title, text: error.summary, details: error.items });
   }
 
   useEffect(() => {
@@ -121,7 +129,6 @@ function App() {
     };
   }, []);
 
-  useEffect(() => () => window.clearTimeout(messageTimer.current), []);
 
   useEffect(() => { trackAnalyticsEventOnce("app_open"); }, []);
 
@@ -329,7 +336,6 @@ function App() {
 
   async function startParse(urls: string[]) {
     setBusy(true);
-    setError(null);
     setVideos([]);
     setAutoJobIds([]);
     setAutoCancelling(false);
@@ -379,13 +385,16 @@ function App() {
       });
       await Promise.all(workers);
       if (failures.length) {
-        setError({
+        showError({
           summary: t("probe.failedCount", { n: failures.length }),
           items: failures.map((f) => {
             const d = describeError(f.raw, "parse");
             return { label: f.url, message: d.message, raw: d.detail ?? "" };
           }),
-        });
+        }, t("notice.parseFailed"));
+      }
+      if (urls.length > failures.length) {
+        addNotice({ type: "success", title: t("notice.parseSuccess"), text: t("notice.parsedCount", { n: urls.length - failures.length }) });
       }
     } finally {
       setBusy(false);
@@ -428,7 +437,7 @@ function App() {
       return id;
     } catch (e) {
       void trackAnalyticsEvent("download_enqueue_failed", { mediaUrl: url, error: classifyError(String(e)) });
-      setError(singleErrorBanner(String(e), "download"));
+      showError(singleErrorBanner(String(e), "download"));
     }
   }
 
@@ -519,13 +528,7 @@ function App() {
 
   return (
     <div className="shell">
-      {message && (
-        <div key={message.id} className={`app-message ${message.type}`} role="alert" aria-live="assertive">
-          <span className="app-message-icon" aria-hidden>{message.type === "success" ? "✓" : message.type === "error" ? "!" : "i"}</span>
-          <span>{message.text}</span>
-          <button type="button" aria-label={t("common.close")} onClick={() => setMessage(null)}>×</button>
-        </div>
-      )}
+      <Notifications notices={notices} onRemove={removeNotice} />
       <UpdateNotice updater={updater} />
       <aside className="side">
         <div className="brand">
@@ -595,7 +598,6 @@ function App() {
               autoMode={autoMode}
               downloadProgress={autoMode ? autoDownloadProgress : null}
               cancelling={autoCancelling}
-              error={error}
               onValueChange={setUrlInput}
               onSubmit={handleStart}
               onCancelDownload={cancelAutoDownload}
@@ -696,7 +698,7 @@ function App() {
 
   function cancel(id: number) {
     void trackAnalyticsEvent("download_cancel_requested", { formatId: "single" });
-    cancelDownload(id).catch((e) => setError(singleErrorBanner(String(e), "download")));
+    cancelDownload(id).catch((e) => showError(singleErrorBanner(String(e), "download")));
   }
 
   /** 删除一条历史记录：清掉持久化条目，并让内存态（jobs / historyJobs）同步消失。 */
