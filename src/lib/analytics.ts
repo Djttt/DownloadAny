@@ -8,6 +8,10 @@ const DEVICE_ID_KEY = "analyticsDeviceId";
 const CLIENT_SESSION_ID = crypto.randomUUID();
 const onceEvents = new Set<AnalyticsEventType>();
 
+/**
+ * 上报口径：新增取值必须是 3-32 位小写字母/数字/下划线（后台按形状校验，
+ * 取值不设白名单，见后端 analytics_routes 的 KNOWN_EVENT_TYPES 注释）。
+ */
 export type AnalyticsEventType =
   | "app_open"
   | "parse_requested"
@@ -84,7 +88,7 @@ export async function trackAnalyticsEvent(
     const token = currentAccessToken();
     const headers = new Headers({ "Content-Type": "application/json" });
     if (token) headers.set("Authorization", `Bearer ${token}`);
-    await fetch(`${API_BASE}/api/analytics/events`, {
+    const response = await fetch(`${API_BASE}/api/analytics/events`, {
       method: "POST",
       headers,
       credentials: "include",
@@ -103,6 +107,11 @@ export async function trackAnalyticsEvent(
         error: data.error?.slice(0, 2000),
       }),
     });
+    // 服务端明确拒绝（4xx/5xx）是契约问题，不是网络问题，必须留痕：后台曾以严格
+    // 枚举静默丢掉 login_succeeded 等 9 类事件。离线/后端不可达依旧静默。
+    if (!response.ok) {
+      console.warn(`[analytics] ${eventType} 上报被拒绝：HTTP ${response.status}`);
+    }
   } catch {
     // 统计不是核心功能，离线或后端异常时静默跳过。
   }
