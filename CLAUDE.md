@@ -41,8 +41,9 @@ React UI  ──invoke──▶  Rust commands  ──spawn (tokio::process)─�
 
 Rust 侧（`src-tauri/src/`，一模块一职责）：
 
-- `resolve.rs` — 二进制解析（开发态 PATH / 打包态内嵌+热更）；`args.rs` — DownloadOptions → argv 白名单拼装（format_id 必须在本次 probe 结果集合或两个哨兵 `__best__`/`__audio_mp3__` 中；URL 必须 http(s) 开头；代理 URL 必须带 http/https/socks4/5 scheme 前缀且无空白，probe 与 download 两条路径都透传 `--proxy`。spawn 传数组，天然免疫 shell 注入）
+- `resolve.rs` — 二进制解析（开发态 PATH / 打包态内嵌+热更）；`args.rs` — DownloadOptions → argv 白名单拼装（format_id 必须在本次 probe 结果集合或两个哨兵 `__best__`/`__audio_mp3__` 中；URL 必须 http(s) 开头；代理 URL 必须带 http/https/socks4/5 scheme 前缀且无空白，probe 与 download 两条路径都透传 `--proxy`。spawn 传数组，天然免疫 shell 注入；站内防盗链头（视频号/抖音 CDN Referer、小红书 UA+Referer）只在 `args::host_request_headers` 一张表里配，探测与下载共用，勿在 probe.rs/queue.rs 另拼命令）
 - `probe.rs` — `yt-dlp -J --no-playlist` 探测，把原始 formats 折叠成人读选项（合成哨兵不暴露 yt-dlp 表达式）
+- `xiaohongshu.rs` — 小红书 xhslink 短链预处理（与后端 `media_parsing/xiaohongshu.py` 同源，改逻辑两边同步）：带 UA+站内 Referer 逐跳跟随重定向，从落地页或 `/login` 墙的 `redirectPath` 还原含 xsec_token 的笔记直链（rednote.com 改写 www.xiaohongshu.com，query 原样 percent-encoding 透传，`%3D` 只解一层）。三处**有意**与后端不同，都是桌面环境才需要的：跳转只允许停留在 xhslink/xiaohongshu/rednote 域名族（防被当成本机端口探测，本应用 MCP 就在 127.0.0.1:8790）、每跳落地先试解、解得出即返回（不必请求那一页）。入口分两个且不能混用：`resolve_for_probe`（探测/重解析）**强制重新跟随**并覆盖会话映射——xsec_token 会过期，重解析就是自愈手段；`resolve_for_playback`（下载）只读映射，保证与探测拿到同一条地址，否则 `cache_probe_aliases` 登记的白名单键会劈叉（任务记录仍存用户输入的那条）。小红书站内的 UA/Referer 由 `args::host_request_headers` 统一下发，探测与下载共用同一张表
 - `progress.rs` — 解析 `--progress-template` 输出的竖线协议：`PROGRESS|percent|downloaded|total|total_estimate|speed|eta`，未知值 yt-dlp 打印 `None`/`NA` 而非 JSON null，因此不用 JSON。进度行实测出现在 **stdout**（stderr 同时消费）
 - `queue.rs` — 任务状态机：`AppState`(Arc<Inner>) + Semaphore(3) 并发、`CommandChild` 无（自持 pid）、取消走进程组终止（Unix `process_group(0)` + `kill -TERM/-9 -<pgid>`，杀到 FFmpeg 孙进程；Windows `taskkill /T /F`）、120s 静默看门狗、探测结果 format_id 白名单缓存
 - `commands.rs` — 主要 IPC 面：`probe_video`（带 proxy 参数） / `enqueue_download` / `cancel_download` / `list_jobs` / `dependency_info` / `set_max_concurrency` / `detect_proxy`（TCP 连通性探测本机常见代理端口，仅作填充建议）

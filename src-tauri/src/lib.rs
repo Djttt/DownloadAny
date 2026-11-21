@@ -11,6 +11,7 @@ mod probe;
 mod progress;
 mod queue;
 mod resolve;
+mod xiaohongshu;
 
 use queue::AppState;
 

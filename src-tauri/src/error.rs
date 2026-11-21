@@ -16,6 +16,9 @@ pub enum AppError {
     ProbeTimeout,
     #[error("探测失败：{0}")]
     ProbeFailed(String),
+    /// 短链还原失败（小红书 xhslink 等）：文案已面向用户，直接透出
+    #[error("{0}")]
+    ShortLink(String),
     #[error("暂不支持播放列表/频道链接，请输入单个视频链接")]
     PlaylistUnsupported,
     #[error("启动下载进程失败：{0}")]

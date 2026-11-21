@@ -1,6 +1,6 @@
 //! 白名单参数拼装：前端永远不接触命令行，这里把结构化选项翻译成 yt-dlp 参数。
 
-use crate::error::AppError;
+use crate::{error::AppError, xiaohongshu};
 use regex::Regex;
 use std::collections::HashSet;
 use std::path::Path;
@@ -17,6 +17,41 @@ pub const FMT_THUMBNAIL_PNG: &str = "__thumbnail_png__";
 pub const FMT_THUMBNAIL_WEBP: &str = "__thumbnail_webp__";
 pub const FMT_SUBTITLES: &str = "__subtitles__";
 pub const FMT_DIRECT_IMAGE: &str = "__direct_image__";
+
+/// 需要伪装站内来源的站点 → 追加的 yt-dlp 请求头参数。
+///
+/// 探测与下载共用同一张表，否则会出现"探测拿得到、下载拿不到"（或反之）的割裂。
+/// 视频号：解析返回带签名的腾讯 CDN 直链，Generic extractor 默认不带视频号
+/// Referer，CDN 可能在解析成功后拒绝真正的媒体下载。抖音图集/直同理。
+pub fn host_request_headers(url: &str) -> Vec<String> {
+    let host = url::Url::parse(url)
+        .ok()
+        .and_then(|parsed| parsed.host_str().map(str::to_ascii_lowercase))
+        .unwrap_or_default();
+    if host == "finder.video.qq.com" {
+        return vec![
+            "--add-header".into(),
+            "Referer:https://channels.weixin.qq.com/".into(),
+        ];
+    }
+    if ["douyinpic.com", "douyinvod.com", "z1cdn.com"]
+        .iter()
+        .any(|domain| host == *domain || host.ends_with(&format!(".{domain}")))
+    {
+        return vec!["--add-header".into(), "Referer:https://www.douyin.com/".into()];
+    }
+    // 小红书笔记页对无 Referer / 非浏览器 UA 的请求会改发 /login 墙，后端同样
+    // 在每次 yt-dlp 请求上带这两个头（media_parsing/xiaohongshu.py 的 policy()）
+    if crate::xiaohongshu::is_site_url(url) {
+        return vec![
+            "--add-header".into(),
+            format!("Referer:{}", xiaohongshu::HOME_URL),
+            "--user-agent".into(),
+            xiaohongshu::USER_AGENT.into(),
+        ];
+    }
+    Vec::new()
+}
 
 fn subtitle_language(raw: &str) -> Option<&str> {
     let language = raw.strip_prefix("__subtitle_")?.strip_suffix("__")?;
@@ -222,30 +257,7 @@ pub fn build_download_args(
         args.push("--ffmpeg-location".into());
         args.push(loc.into());
     }
-    // 视频号解析返回的是带签名的腾讯 CDN 直链。浏览器请求会携带视频号
-    // Referer，而 yt-dlp 的 Generic extractor 默认不会；CDN 因而可能在
-    // 解析成功后拒绝真正的媒体下载。
-    let download_host = url::Url::parse(url)
-        .ok()
-        .and_then(|parsed| parsed.host_str().map(str::to_ascii_lowercase))
-        .unwrap_or_default();
-    if download_host == "finder.video.qq.com" {
-        args.extend([
-            "--add-header".into(),
-            "Referer:https://channels.weixin.qq.com/".into(),
-        ]);
-    } else if download_host == "douyinpic.com"
-        || download_host.ends_with(".douyinpic.com")
-        || download_host == "douyinvod.com"
-        || download_host.ends_with(".douyinvod.com")
-        || download_host == "z1cdn.com"
-        || download_host.ends_with(".z1cdn.com")
-    {
-        args.extend([
-            "--add-header".into(),
-            "Referer:https://www.douyin.com/".into(),
-        ]);
-    }
+    args.extend(host_request_headers(url));
     match format_id {
         FMT_BEST => args.extend(["-f".into(), "bv*+ba/b".into()]),
         id if video_height(id).is_some() => {
@@ -339,6 +351,43 @@ mod tests {
             extract_url("https://www.bilibili.com/video/BV1xx").unwrap(),
             "https://www.bilibili.com/video/BV1xx"
         );
+    }
+
+    #[test]
+    fn anti_leech_referers_follow_the_host() {
+        let wechat = host_request_headers("https://finder.video.qq.com/a.mp4");
+        assert!(wechat
+            .windows(2)
+            .any(|w| w[0] == "--add-header" && w[1] == "Referer:https://channels.weixin.qq.com/"));
+        let douyin = host_request_headers("https://p95-zjwztc-sign.douyinpic.com/a.jpeg");
+        assert!(douyin
+            .windows(2)
+            .any(|w| w[0] == "--add-header" && w[1] == "Referer:https://www.douyin.com/"));
+        assert!(host_request_headers("https://www.bilibili.com/video/BV1xx").is_empty());
+        // 相似后缀不能算命中
+        assert!(host_request_headers("https://douyinpic.com.evil.cn/a").is_empty());
+    }
+
+    #[test]
+    fn xiaohongshu_requests_carry_site_referer_and_browser_ua() {
+        // 后端每次 yt-dlp 请求都注入 UA + 站内 Referer（media_parsing/xiaohongshu.py
+        // 的 policy()）：缺了它们笔记页会被塞回 /login 墙，探测报 Unsupported URL
+        for url in [
+            "https://www.xiaohongshu.com/discovery/item/6af9738d00000000090214ed?xsec_token=x",
+            "https://www.rednote.com/explore/6af9738d00000000090214ed?xsec_token=x",
+        ] {
+            let headers = host_request_headers(url);
+            assert!(
+                headers
+                    .windows(2)
+                    .any(|w| w[0] == "--add-header" && w[1] == "Referer:https://www.xiaohongshu.com/"),
+                "{url} 缺站内 Referer"
+            );
+            assert!(
+                headers.windows(2).any(|w| w[0] == "--user-agent" && w[1].starts_with("Mozilla/5.0")),
+                "{url} 缺浏览器 UA"
+            );
+        }
     }
 
     #[test]
