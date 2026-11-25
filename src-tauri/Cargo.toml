@@ -1,6 +1,6 @@
 [package]
 name = "lumeany"
-version = "0.1.5"
+version = "1.0.0"
 description = "A yt-dlp powered desktop downloader"
 authors = ["dengjun"]
 edition = "2024"

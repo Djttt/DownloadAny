@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use base64::Engine;
 use std::collections::HashSet;
+use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
 
@@ -51,23 +52,32 @@ pub struct ProbeResult {
     pub valid_ids: HashSet<String>,
 }
 
-pub async fn probe(url: &str, proxy: Option<&str>) -> Result<ProbeResult, AppError> {
-    let program = resolve::yt_dlp();
-    let mut cmd = program.command();
+/// 探测命令行：与下载共用 `args::host_request_headers` 的站点头表，
+/// 否则会出现"探测拿得到、下载拿不到"（或反之）的割裂。URL 收尾，防被当选项值。
+fn probe_args(url: &str, proxy: Option<&str>, plugin_dir: Option<&Path>) -> Vec<String> {
     let mut argv: Vec<String> = vec![
         "-J".into(),
         "--no-playlist".into(),
         "--no-warnings".into(),
         "--no-colors".into(),
     ];
-    if let Ok(plugin_dir) = embedded_components::ensure_ytdlp_plugins() {
-        args::add_plugin_dir(&mut argv, &plugin_dir);
+    if let Some(dir) = plugin_dir {
+        args::add_plugin_dir(&mut argv, dir);
     }
     // 探测与下载走同一代理，否则会出现"探测成功但下载连不上"（或反之）的割裂体验
     if let Some(p) = proxy {
         argv.extend(["--proxy".into(), p.into()]);
     }
+    argv.extend(args::host_request_headers(url));
     argv.push(url.into());
+    argv
+}
+
+pub async fn probe(url: &str, proxy: Option<&str>) -> Result<ProbeResult, AppError> {
+    let program = resolve::yt_dlp();
+    let mut cmd = program.command();
+    let plugin_dir = embedded_components::ensure_ytdlp_plugins().ok();
+    let argv = probe_args(url, proxy, plugin_dir.as_deref());
     cmd.args(argv)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -192,7 +202,23 @@ fn gallery_images(json: &Value) -> Vec<ImageOption> {
 
 #[cfg(test)]
 mod tests {
-    use super::{gallery_images, resolution_label};
+    use super::{gallery_images, probe_args, resolution_label};
+
+    #[test]
+    fn probe_carries_the_same_host_headers_as_downloads() {
+        let url = "https://www.xiaohongshu.com/explore/6af9738d00000000090214ed?xsec_token=x";
+        let argv = probe_args(url, Some("http://127.0.0.1:7890"), None);
+        assert_eq!(argv.last().unwrap(), url, "URL 必须收尾，不能被当成选项值");
+        assert!(argv
+            .windows(2)
+            .any(|w| w[0] == "--add-header" && w[1] == "Referer:https://www.xiaohongshu.com/"));
+        assert!(argv
+            .windows(2)
+            .any(|w| w[0] == "--user-agent" && w[1].starts_with("Mozilla/5.0")));
+        assert!(argv
+            .windows(2)
+            .any(|w| w[0] == "--proxy" && w[1] == "http://127.0.0.1:7890"));
+    }
 
     #[test]
     fn extracts_every_douyin_gallery_image() {
