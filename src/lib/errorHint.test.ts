@@ -21,7 +21,8 @@ const CASES: Case[] = [
   ["视频不存在", "ERROR: [youtube] abc: Video unavailable. This video has been removed by the publisher", "deleted"],
   ["真实样本:不可用(带 is)", "ERROR: [youtube] zzzzzzzzzzz: This video is unavailable", "deleted"],
   ["真实样本:私密(变体)", "ERROR: [youtube] abc: This video is private", "privateVideo"],
-  ["真实样本:页面 404 当删除解", "ERROR: [generic] watch: Unable to download webpage: HTTP Error 404: Not Found (caused by <HTTPError 404: Not Found>)", "deleted"],
+  ["页面 404 不等于视频删除", "ERROR: [generic] watch: Unable to download webpage: HTTP Error 404: Not Found (caused by <HTTPError 404: Not Found>)", "resourceMissing"],
+  ["央视媒体 404", "ERROR: unable to download video data: HTTP Error 404: Not Found", "resourceMissing"],
   ["画质失效", "ERROR: Requested format is not available. Use --list-formats for a list of available formats", "formatExpired"],
   ["磁盘满(优先于 network)", "ERROR: unable to download video data: [Errno 28] No space left on device", "diskFull"],
   ["权限(优先于 network)", "ERROR: unable to open for writing: [Errno 13] Permission denied", "permission"],
@@ -48,6 +49,14 @@ test("describeError 已识别类别：人话主文案 + 原始串进详情", () 
   const d = describeError(raw, "parse");
   assert.equal(d.detail, raw);
   assert.ok(d.message.includes("该网站暂时拒绝了请求"));
+});
+
+test("媒体 404 提示重新解析，并保留原始错误", () => {
+  const raw = "ERROR: unable to download video data: HTTP Error 404: Not Found";
+  const result = describeError(raw, "download");
+  assert.match(result.message, /重新解析/);
+  assert.doesNotMatch(result.message, /已被删除/);
+  assert.equal(result.detail, raw);
 });
 
 test("describeError 直通：原文即文案，无详情条目", () => {

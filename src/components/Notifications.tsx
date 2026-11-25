@@ -1,22 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { t } from "../lib/i18n";
-import type { ErrorBanner } from "../lib/errorHint";
 
 export interface AppNotice {
   id: number;
   type: "success" | "error" | "info";
   title: string;
   text?: string;
-  details?: ErrorBanner["items"];
 }
 
 function Notification({ notice, onRemove }: { notice: AppNotice; onRemove: (id: number) => void }) {
   const [leaving, setLeaving] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   const dismissTimer = useRef(0);
-  const paused = hovered || focused || expanded;
+  const paused = hovered || focused;
 
   function dismiss() { setLeaving(true); }
 
@@ -42,20 +39,6 @@ function Notification({ notice, onRemove }: { notice: AppNotice; onRemove: (id: 
       <div className="app-notice-content">
         <strong>{notice.title}</strong>
         {notice.text && <p>{notice.text}</p>}
-        {!!notice.details?.length && (
-          <details className="app-notice-details" onToggle={(event) => setExpanded(event.currentTarget.open)}>
-            <summary>{t("notice.details")}</summary>
-            <div className="app-notice-errors">
-              {notice.details.map((item, index) => (
-                <div key={index}>
-                  {item.label && <div className="app-notice-link" title={item.label}>{item.label}</div>}
-                  {item.message && <p>{item.message}</p>}
-                  {item.raw && <details><summary>{t("err.rawToggle")}</summary><pre>{item.raw}</pre></details>}
-                </div>
-              ))}
-            </div>
-          </details>
-        )}
       </div>
       <button className="app-notice-close" type="button" aria-label={t("common.close")} onClick={dismiss}>×</button>
     </article>

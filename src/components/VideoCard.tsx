@@ -3,7 +3,7 @@ import type { FormatOption, JobRecord, VideoInfo } from "../types";
 import { fmtBytes, fmtDuration, fmtSpeed } from "../lib/format";
 import { openDownloadLocation } from "../lib/tauri";
 import { t } from "../lib/i18n";
-import { describeError } from "../lib/errorHint";
+import noCover from "../assets/no-cover.png";
 import { Icon, type IconName } from "./Icon";
 
 const AUDIO_FORMATS: FormatOption[] = [
@@ -26,9 +26,10 @@ interface Props {
   onDownload: (format: FormatOption, urlOverride?: string, titleSuffix?: string) => Promise<number | undefined>;
   onCancel: (id: number) => void;
   onDiscard: () => void;
+  onShowError: (job: JobRecord) => void;
 }
 
-export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, onDiscard }: Props) {
+export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, onDiscard, onShowError }: Props) {
   const videoFormats = useMemo(() => {
     const explicitFormats = video.formats.filter(
       (format) => !format.id.startsWith("__") || format.id.startsWith("__video_"),
@@ -70,12 +71,11 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
     <div className={`format-panel${isGallery ? " gallery-panel" : ""}`}>
       {!isGallery && (
         <div className="video-summary">
-          {video.thumbnail && (
-            <div className="video-thumb-wrap">
-              <img className="thumb" src={video.thumbnailPreview || video.thumbnail} alt="" referrerPolicy="no-referrer" />
-              {video.duration != null && <span className="video-duration">{fmtDuration(video.duration)}</span>}
-            </div>
-          )}
+          <div className="video-thumb-wrap">
+            <VideoCover key={`${video.thumbnailPreview ?? ""}|${video.thumbnail ?? ""}`}
+              preview={video.thumbnailPreview} thumbnail={video.thumbnail} />
+            {video.duration != null && <span className="video-duration">{fmtDuration(video.duration)}</span>}
+          </div>
         </div>
       )}
 
@@ -99,6 +99,7 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
               onChange={(value) => setSelected((current) => ({ ...current, [kind]: value }))}
               onDownload={() => start(kind, options, image.url, image.label)}
               onCancel={onCancel}
+              onShowError={onShowError}
             />
           );
         })}
@@ -117,6 +118,7 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
             onChange={(value) => setSelected((current) => ({ ...current, video: value }))}
             onDownload={() => start("video", videoFormats)}
             onCancel={onCancel}
+            onShowError={onShowError}
           />
         )}
         {!isGallery && (
@@ -133,6 +135,7 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
             onChange={(value) => setSelected((current) => ({ ...current, subtitle: value }))}
             onDownload={() => start("subtitle", subtitleLanguages)}
             onCancel={onCancel}
+            onShowError={onShowError}
           />
         )}
         {!isGallery && (
@@ -148,6 +151,7 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
             onChange={(value) => setSelected((current) => ({ ...current, audio: value }))}
             onDownload={() => start("audio", AUDIO_FORMATS)}
             onCancel={onCancel}
+            onShowError={onShowError}
           />
         )}
         {!isGallery && (
@@ -163,6 +167,7 @@ export function FormatBar({ video, busy, outputDir, jobs, onDownload, onCancel, 
             onChange={(value) => setSelected((current) => ({ ...current, image: value }))}
             onDownload={() => start("image", IMAGE_FORMATS)}
             onCancel={onCancel}
+            onShowError={onShowError}
           />
         )}
       </div>
@@ -188,6 +193,7 @@ function DownloadRow({
   onChange,
   onDownload,
   onCancel,
+  onShowError,
   showSelectedSize = false,
   emptyLabel,
 }: {
@@ -202,6 +208,7 @@ function DownloadRow({
   onChange: (value: string) => void;
   onDownload: () => void;
   onCancel: (id: number) => void;
+  onShowError: (job: JobRecord) => void;
   showSelectedSize?: boolean;
   emptyLabel?: string;
 }) {
@@ -222,8 +229,6 @@ function DownloadRow({
           ? t("status.cancelled")
           : null;
   const selectedOption = options.find((option) => option.id === value);
-  const failDesc =
-    job?.status === "failed" && job.error ? describeError(job.error, "download") : null;
 
   return (
     <div className="download-row">
@@ -259,7 +264,10 @@ function DownloadRow({
             )}
           </div>
           <div className="inline-download">
-            {status && <em className={job?.status}>{status}</em>}
+            {job?.status === "failed" ? (
+              <button className="row-failure" title={t("notice.failureReason")} aria-label={t("notice.failureReason")}
+                onClick={() => onShowError(job)}>{status}</button>
+            ) : status && <em className={job?.status}>{status}</em>}
             {job?.status === "completed" ? (
               <button
                 type="button"
@@ -285,19 +293,16 @@ function DownloadRow({
           </div>
         </>
       )}
-      {failDesc && (
-        <div className="download-error" role="alert" title={failDesc.detail ?? undefined}>
-          {failDesc.message}
-          {failDesc.detail && (
-            <details>
-              <summary>{t("err.rawToggle")}</summary>
-              <pre>{failDesc.detail}</pre>
-            </details>
-          )}
-        </div>
-      )}
     </div>
   );
+}
+
+function VideoCover({ preview, thumbnail }: { preview?: string | null; thumbnail?: string | null }) {
+  const sources = [...new Set([preview, thumbnail].filter((src): src is string => Boolean(src))), noCover];
+  const [index, setIndex] = useState(0);
+  const fallback = sources[index] === noCover;
+  return <img className="thumb" src={sources[index]} alt={fallback ? t("cover.unavailable") : t("cover.label")}
+    referrerPolicy="no-referrer" onError={index < sources.length - 1 ? () => setIndex(index + 1) : undefined} />;
 }
 
 function FormatSelect({

@@ -16,6 +16,7 @@ export type ErrorKind =
   | "loginRequired"
   | "privateVideo"
   | "deleted"
+  | "resourceMissing"
   | "copyright"
   | "formatExpired"
   | "unsupportedSite"
@@ -41,7 +42,8 @@ const RULES: [ErrorKind, string[]][] = [
   ["copyright", ["copyright", "legal claims"]],
   ["formatExpired", ["requested format is not available"]],
   ["unsupportedSite", ["unsupported url"]],
-  ["deleted", ["video unavailable", "video is unavailable", "no longer available", "removed by the publisher", "does not exist", "http error 404"]],
+  ["resourceMissing", ["http error 404"]],
+  ["deleted", ["video unavailable", "video is unavailable", "no longer available", "removed by the publisher", "does not exist"]],
   ["diskFull", ["no space left on device", "errno 28"]],
   ["permission", ["permission denied", "errno 13", "read-only file system"]],
   ["network", [

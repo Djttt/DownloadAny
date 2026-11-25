@@ -2,7 +2,6 @@ import type { JobRecord } from "../types";
 import { fmtBytes, fmtEta, fmtSpeed } from "../lib/format";
 import { openDownloadLocation } from "../lib/tauri";
 import { t } from "../lib/i18n";
-import { describeError } from "../lib/errorHint";
 import { Icon } from "./Icon";
 
 const STATUS_TEXT = {
@@ -18,10 +17,11 @@ interface Props {
   outputDir: string;
   onCancel: (id: number) => void;
   onDelete: (job: JobRecord) => void;
+  onShowError: (job: JobRecord) => void;
 }
 
 /** 队列列表：标题+状态子行 / 类型 / 进度 / 动作 */
-export function QueueList({ jobs, outputDir, onCancel, onDelete }: Props) {
+export function QueueList({ jobs, outputDir, onCancel, onDelete, onShowError }: Props) {
   if (jobs.length === 0) {
     return <div className="empty">{t("queue.empty")}</div>;
   }
@@ -34,7 +34,7 @@ export function QueueList({ jobs, outputDir, onCancel, onDelete }: Props) {
         <span className="c-act">{t("queue.colAct")}</span>
       </div>
       {jobs.map((job) => (
-        <JobRow key={job.historyId ?? job.id} job={job} outputDir={outputDir} onCancel={onCancel} onDelete={onDelete} />
+        <JobRow key={job.historyId ?? job.id} job={job} outputDir={outputDir} onCancel={onCancel} onDelete={onDelete} onShowError={onShowError} />
       ))}
     </div>
   );
@@ -45,26 +45,24 @@ function JobRow({
   outputDir,
   onCancel,
   onDelete,
+  onShowError,
 }: {
   job: JobRecord;
   outputDir: string;
   onCancel: (id: number) => void;
   onDelete: (job: JobRecord) => void;
+  onShowError: (job: JobRecord) => void;
 }) {
   const active = job.status === "running" || job.status === "queued";
 
-  // 状态子行：只讲"到什么程度/为什么失败"；历史记录不展示本地文件路径
+  // 失败详情统一在消息中展示，历史记录保留重新查看入口。
   let sub: string | null = null;
-  let subRaw: string | null = null;
   if (job.status === "running") {
     const size =
       job.totalBytes != null
         ? `${fmtBytes(job.downloadedBytes)} / ${fmtBytes(job.totalBytes)}`
         : fmtBytes(job.downloadedBytes);
     sub = t("queue.runningSub", { size, speed: fmtSpeed(job.speed), eta: fmtEta(job.eta) });
-  } else if (job.status === "failed" && job.error) {
-    sub = describeError(job.error, "download").message;
-    subRaw = job.error;
   }
 
   return (
@@ -72,7 +70,7 @@ function JobRow({
       <span className="c-title" title={job.title}>
         <span className="t">{job.title}</span>
         {sub && (
-          <span className="s" title={subRaw ?? undefined}>
+          <span className="s">
             {sub}
           </span>
         )}
@@ -92,6 +90,9 @@ function JobRow({
         <span className={`st ${job.status}`}>{t(STATUS_TEXT[job.status])}</span>
       </span>
       <span className="c-act">
+        {job.status === "failed" && (
+          <button className="icon" aria-label={t("notice.failureReason")} title={t("notice.failureReason")} onClick={() => onShowError(job)}>!</button>
+        )}
         {active && (
           <button className="icon" aria-label={t("queue.stop")} title={t("queue.stop")} onClick={() => onCancel(job.id)}>
             <Icon name="stop" size={13} />

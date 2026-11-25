@@ -71,6 +71,7 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [notices, setNotices] = useState<AppNotice[]>([]);
   const noticeId = useRef(0);
+  const notifiedFailures = useRef(new Set<number>());
   const [jobs, setJobs] = useState<Record<number, JobRecord>>({});
   const [historyJobs, setHistoryJobs] = useState<JobRecord[]>([]);
   const [outputDir, setOutputDir] = useState("");
@@ -114,7 +115,11 @@ function App() {
   }
 
   function showError(error: ErrorBanner, title = t("notice.error")) {
-    addNotice({ type: "error", title, text: error.summary, details: error.items });
+    addNotice({ type: "error", title, text: error.summary });
+  }
+
+  function showDownloadError(job: Pick<JobRecord, "error" | "title">) {
+    showError(singleErrorBanner(job.error || t("err.genericDownload"), "download"), t("notice.downloadFailed"));
   }
 
   useEffect(() => {
@@ -220,6 +225,11 @@ function App() {
     );
     reg(onJobStatus(async (s) => {
       upsert(s.jobId, { status: s.status, error: s.error, outputPath: s.outputPath });
+      if (s.status === "failed" && !notifiedFailures.current.has(s.jobId)) {
+        notifiedFailures.current.add(s.jobId);
+        const task = analyticsJobs.current[s.jobId];
+        showDownloadError({ error: s.error, title: task?.title || task?.url || t("task.fallback", { id: s.jobId }) });
+      }
       const eventType = s.status === "completed"
         ? "download_completed"
         : s.status === "failed"
@@ -644,6 +654,7 @@ function App() {
                     return enqueue(format, targetUrl, title, item.info.id);
                   }}
                   onCancel={cancel}
+                  onShowError={showDownloadError}
                   onDiscard={() => setVideos((current) => current.filter((video) => video.key !== item.key))}
                 />
               ))}
@@ -653,7 +664,8 @@ function App() {
 
         {view === "history" && (
           <section className="list" aria-label={t("app.listAriaHistory")}>
-            <QueueList jobs={visible} outputDir={outputDir} onCancel={cancel} onDelete={deleteHistoryJob} />
+            <QueueList jobs={visible} outputDir={outputDir} onCancel={cancel} onDelete={deleteHistoryJob}
+              onShowError={showDownloadError} />
           </section>
         )}
 
