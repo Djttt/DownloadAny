@@ -69,6 +69,7 @@ function App() {
   const [videos, setVideos] = useState<ParsedVideo[]>([]);
   const [urlInput, setUrlInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const parseInFlight = useRef(false);
   const [notices, setNotices] = useState<AppNotice[]>([]);
   const noticeId = useRef(0);
   const notifiedFailures = useRef(new Set<number>());
@@ -331,83 +332,89 @@ function App() {
   }
 
   /** 探测；自动模式下直接以首个格式（最佳画质+音频）入队 */
-  async function handleStart(urls: string[]) {
-    const activeUser = await restoreUser();
-    setUser(activeUser);
-    if (!activeUser) {
-      void trackAnalyticsEvent("parse_blocked", { error: "login_required" });
-      pendingParse.current = urls;
-      showMessage(t("auth.loginToParse"), "info");
-      setAuthOpen(true);
-      return;
+  async function handleStart(urls: string[], authenticatedUser?: AuthUser) {
+    // ref 同步拦截连点，不依赖 React 下一次渲染；登录校验也属于忙碌期。
+    if (parseInFlight.current || !urls.length) return;
+    parseInFlight.current = true;
+    setBusy(true);
+    try {
+      const activeUser = authenticatedUser ?? await restoreUser();
+      setUser(activeUser);
+      if (!activeUser) {
+        void trackAnalyticsEvent("parse_blocked", { error: "login_required" });
+        pendingParse.current = urls;
+        showMessage(t("auth.loginToParse"), "info");
+        setAuthOpen(true);
+        return;
+      }
+      await startParse(urls);
+    } catch (error) {
+      showError(singleErrorBanner(String(error), "parse"), t("notice.parseFailed"));
+    } finally {
+      parseInFlight.current = false;
+      setBusy(false);
     }
-    await startParse(urls);
   }
 
   async function startParse(urls: string[]) {
-    setBusy(true);
     setVideos([]);
     setAutoJobIds([]);
     setAutoCancelling(false);
     autoCancelRequested.current = false;
     const failures: { url: string; raw: string }[] = [];
-    try {
-      // 控制并发数，批量链接较多时避免同时启动过多 yt-dlp 进程。
-      const pending = [...urls];
-      const workers = Array.from({ length: Math.min(3, pending.length) }, async () => {
-        while (pending.length) {
-          const url = pending.shift();
-          if (!url) break;
-          void trackAnalyticsEvent("parse_requested", { mediaUrl: url });
-          try {
-            // 本地 yt-dlp 解析：probe_and_cache 已在 Rust 侧登记格式白名单，
-            // 无需再走 cacheProbeResult；代理与下载同源生效。
-            const info = await probeVideo(url, proxyUrl || null);
-            void trackAnalyticsEvent("parse_succeeded", {
-              mediaId: info.id,
-              mediaTitle: info.title,
-              mediaUrl: url,
-            });
-            if (autoMode && info.formats[0]) {
-              if (autoCancelRequested.current) continue;
-              const id = await enqueue(
-                info.formats[0],
-                url,
-                info.title,
-                info.id,
-              );
-              if (id != null) {
-                if (autoCancelRequested.current) {
-                  cancelDownload(id).catch(() => {});
-                } else {
-                  setAutoJobIds((current) => [...current, id]);
-                }
+    // 控制并发数，批量链接较多时避免同时启动过多 yt-dlp 进程。
+    const pending = [...urls];
+    const workers = Array.from({ length: Math.min(3, pending.length) }, async () => {
+      while (pending.length) {
+        const url = pending.shift();
+        if (!url) break;
+        void trackAnalyticsEvent("parse_requested", { mediaUrl: url });
+        try {
+          // 本地 yt-dlp 解析：probe_and_cache 已在 Rust 侧登记格式白名单，
+          // 无需再走 cacheProbeResult；代理与下载同源生效。
+          const info = await probeVideo(url, proxyUrl || null);
+          void trackAnalyticsEvent("parse_succeeded", {
+            mediaId: info.id,
+            mediaTitle: info.title,
+            mediaUrl: url,
+          });
+          if (autoMode && info.formats[0]) {
+            if (autoCancelRequested.current) continue;
+            const id = await enqueue(
+              info.formats[0],
+              url,
+              info.title,
+              info.id,
+            );
+            if (id != null) {
+              if (autoCancelRequested.current) {
+                cancelDownload(id).catch(() => {});
+              } else {
+                setAutoJobIds((current) => [...current, id]);
               }
-            } else {
-              const item = { key: `${url}-${info.id}`, order: urls.indexOf(url), url, info };
-              setVideos((current) => [...current, item].sort((a, b) => a.order - b.order));
             }
-          } catch (e) {
-            void trackAnalyticsEvent("parse_failed", { mediaUrl: url, error: classifyError(String(e)) });
-            failures.push({ url, raw: String(e) });
+          } else {
+            const item = { key: `${url}-${info.id}`, order: urls.indexOf(url), url, info };
+            setVideos((current) => [...current, item].sort((a, b) => a.order - b.order));
           }
+        } catch (e) {
+          void trackAnalyticsEvent("parse_failed", { mediaUrl: url, error: classifyError(String(e)) });
+          failures.push({ url, raw: String(e) });
         }
-      });
-      await Promise.all(workers);
-      if (failures.length) {
-        showError({
-          summary: t("probe.failedCount", { n: failures.length }),
-          items: failures.map((f) => {
-            const d = describeError(f.raw, "parse");
-            return { label: f.url, message: d.message, raw: d.detail ?? "" };
-          }),
-        }, t("notice.parseFailed"));
       }
-      if (urls.length > failures.length) {
-        addNotice({ type: "success", title: t("notice.parseSuccess"), text: t("notice.parsedCount", { n: urls.length - failures.length }) });
-      }
-    } finally {
-      setBusy(false);
+    });
+    await Promise.all(workers);
+    if (failures.length) {
+      showError({
+        summary: t("probe.failedCount", { n: failures.length }),
+        items: failures.map((f) => {
+          const d = describeError(f.raw, "parse");
+          return { label: f.url, message: d.message, raw: d.detail ?? "" };
+        }),
+      }, t("notice.parseFailed"));
+    }
+    if (urls.length > failures.length) {
+      addNotice({ type: "success", title: t("notice.parseSuccess"), text: t("notice.parsedCount", { n: urls.length - failures.length }) });
     }
   }
 
@@ -684,7 +691,7 @@ function App() {
             showMessage(signedUp ? t("auth.registerSuccess") : t("auth.loginSuccess"), "success");
             const urls = pendingParse.current;
             pendingParse.current = null;
-            if (urls) void startParse(urls);
+            if (urls) void handleStart(urls, authenticatedUser);
           }}
           onMessage={showMessage}
         />
