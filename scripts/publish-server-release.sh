@@ -20,7 +20,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SERVER="${SERVER:-ubuntu@www.lumeany.cc}"
+# www.lumeany.cc 现在 Cloudflare 后面（不代理 22 端口），SSH/SCP 必须直连源站 IP
+SERVER="${SERVER:-ubuntu@43.129.229.94}"
 API="${API:-https://api.lumeany.cc}"
 REMOTE_ROOT="${REMOTE_ROOT:-/srv/downloadany}"
 REPO="${REPO:-Djttt/DownloadAny}"
