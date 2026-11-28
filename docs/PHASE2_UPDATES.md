@@ -57,10 +57,12 @@ Invoke-RestMethod -Method Post -Uri "$env:DOWNLOADANY_API_BASE_URL/api/updates/a
 
 ## 3. 独立发布 yt-dlp
 
-使用与应用相同的 Tauri 私钥签名原始 yt-dlp 文件：
+使用与应用相同的 Tauri 私钥签名原始 yt-dlp 文件。**必须带 `--app-version`（等于登记时的
+`version`）**：客户端会校验签名的 trusted comment 里绑定的版本与清单版本一致（对齐桌面
+`requireSignedVersion`），不带则该组件会被拒绝、静默不更新；同时拒绝低于当前版本的降级。
 
 ```powershell
-pnpm tauri signer sign .\yt-dlp.exe --private-key-path .\.tauri\downloadany.key
+pnpm tauri signer sign .\yt-dlp.exe --app-version 2026.11.08 --private-key-path .\.tauri\downloadany.key
 Get-FileHash .\yt-dlp.exe -Algorithm SHA256
 ```
 
