@@ -41,6 +41,7 @@ $body = @{
   notes = "本版本更新说明"
   rollout_percent = 10
   minimum_version = "0.1.0"
+  forced = $false   # true 时客户端必须完成更新才能继续使用解析/下载（见 docs/UPDATER.md）
 } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri "$env:DOWNLOADANY_API_BASE_URL/api/updates/admin/desktop" `
   -Headers $headers -ContentType "application/json" -Body $body
@@ -51,8 +52,10 @@ Invoke-RestMethod -Method Post -Uri "$env:DOWNLOADANY_API_BASE_URL/api/updates/a
 
 `rollout_percent` 可通过 `PATCH /api/updates/admin/desktop/{id}` 从 10 逐步提高到
 100（请求体如 `{"rollout_percent": 50}`）；同一设备始终落在同一灰度桶。
-`minimum_version` 以下的客户端会忽略灰度比例，直接收到该版本。beta 客户端可收到 beta
-和 stable，stable 客户端只接收 stable。错误发布可调用
+`minimum_version` 以下的客户端会忽略灰度比例，直接收到该版本。`forced`（同样可 PATCH
+`{"forced": true|false}`）把该版本标记为强制更新：命中的客户端（含 update_policy 的构建）
+弹不可关闭门禁并在 Rust 侧拒绝解析/下载，直到完成更新；旧客户端忽略此字段、仍为可选更新。
+beta 客户端可收到 beta 和 stable，stable 客户端只接收 stable。错误发布可调用
 `DELETE /api/updates/admin/desktop/{id}` 立即停用。
 
 ## 3. 独立发布 yt-dlp

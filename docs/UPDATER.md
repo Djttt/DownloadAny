@@ -44,8 +44,17 @@ CI 构建成功、Release 产物齐备后，在本地仓库根执行：
 
 ```bash
 ./scripts/publish-server-release.sh 0.1.2 --notes "本版本更新说明"   # 版本号缺省时取 tauri.conf.json
-# 可选：--rollout 30 灰度起步；--min-version 0.1.0 强制低版本直收
+# 可选：--rollout 30 灰度起步；--min-version 0.1.0 强制低版本直收；--forced 强制更新
 ```
+
+**强制更新（--forced）**：登记时打 `forced` 标记后，命中该版本的客户端会弹**不可关闭的全屏门禁**
+（无「稍后/跳过」），并完成更新前 `probe_video`/`enqueue_download`（含 MCP/agent 面）在 Rust 侧直接
+被拒（`update_policy.rs` → queue 两个入口），只有下载并安装新版本后服务才恢复。要点：
+
+- 语义挂在「最新可用版本」上：PATCH `{"forced":false}` 或急停该发布即可解除，客户端启动检查与
+  每 30 分钟轮询各收敛一次；网络故障不改变既有判定（不误锁也不误放）。
+- **只认识 forced 的客户端版本起效**（本逻辑发布起的新构建）；旧客户端依旧走可选更新。
+- 与 `--min-version` 区分：后者只是"低于它的设备绕过灰度直收"，不产生门禁。
 
 脚本依次：从 GitHub Release 下载 updater 四件套（NSIS exe / app.tar.gz 及各自 `.sig`）→
 上传到服务器 `/srv/downloadany/desktop/<ver>/`（Caddy `/downloadany/*` 静态路由即产物直链根）→

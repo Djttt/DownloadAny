@@ -3211,3 +3211,51 @@ select:focus-visible {
     transition: none !important;
   }
 }
+
+/* ===== 强制更新门禁（forced update gate）===== */
+.force-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(10, 12, 20, 0.55);
+  backdrop-filter: blur(3px);
+}
+
+.force-gate-card {
+  width: min(440px, 100%);
+  padding: 22px;
+  border: 1px solid var(--indigo-line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+  animation: result-card-in 0.3s ease both;
+}
+
+.force-gate-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.force-gate-hint {
+  margin: 10px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.force-gate-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.force-gate-actions .primary,
+.force-gate-actions .chg {
+  flex: 1;
+}

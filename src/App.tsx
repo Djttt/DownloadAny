@@ -56,6 +56,7 @@ import {
   UpdateNotice,
   menuIcons,
 } from "./components/SideMenu";
+import { ForcedUpdateGate } from "./components/ForceUpdateGate";
 import "./App.css";
 
 const TERMINAL: JobRecord["status"][] = ["completed", "failed", "cancelled"];
@@ -546,7 +547,8 @@ function App() {
   return (
     <div className="shell">
       <Notifications notices={notices} onRemove={removeNotice} />
-      <UpdateNotice updater={updater} />
+      <ForcedUpdateGate updater={updater} />
+      {!updater.state.forced && <UpdateNotice updater={updater} />}
       <aside className="side">
         <div className="brand">
           <span className="gem" aria-hidden>

@@ -903,7 +903,8 @@ function updateStatus(updater: AppUpdater): string {
 }
 
 function UpdateActions({ updater, compact = false }: { updater: AppUpdater; compact?: boolean }) {
-  const { phase, version, visible } = updater.state;
+  // 强制更新时不提供「稍后/跳过」出口（门禁在全屏层，这里再挡一层）。
+  const { phase, version, visible, forced } = updater.state;
   const busy = phase === "checking" || phase === "downloading" || phase === "installing";
   return (
     <div className={compact ? "update-actions compact" : "update-actions"}>
@@ -923,12 +924,12 @@ function UpdateActions({ updater, compact = false }: { updater: AppUpdater; comp
         </button>
       )}
       {/* 「稍后」只在浮动提示可见时有意义（收起浮层）；内嵌卡片不提供死按钮。 */}
-      {version && visible && phase !== "installing" && (
+      {!forced && version && visible && phase !== "installing" && (
         <button type="button" className="chg" disabled={busy} onClick={updater.later}>
           {t("update.later")}
         </button>
       )}
-      {version && (phase === "available" || phase === "ready" || phase === "blocked") && (
+      {!forced && version && (phase === "available" || phase === "ready" || phase === "blocked") && (
         <button type="button" className="clear-update" disabled={busy} onClick={() => void updater.skip()}>
           {t("update.skip")}
         </button>

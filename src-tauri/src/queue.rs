@@ -261,6 +261,8 @@ pub async fn enqueue(
     state: &AppState,
     mut opts: DownloadOptions,
 ) -> Result<u64, AppError> {
+    // 强制更新未完成时拒绝入队（UI 与 agent 面共用此入口）。
+    crate::update_policy::ensure_service_allowed()?;
     let requested = args::extract_url(&opts.url)?;
     args::validate_proxy(opts.proxy.as_deref())?;
     // 与探测同一个还原入口：白名单按还原后的直链登记，yt-dlp 也只认这条；
@@ -604,6 +606,8 @@ pub async fn probe_and_cache(
     proxy: Option<&str>,
     state: &AppState,
 ) -> Result<probe::VideoInfo, AppError> {
+    // 强制更新未完成时拒绝解析（UI 与 agent 面共用此入口）。
+    crate::update_policy::ensure_service_allowed()?;
     // 小红书 xhslink 短链不在 yt-dlp 识别范围（跟着重定向只会撞到 /login 墙），
     // 先还原成笔记直链再探测——与后端 /parse、/resolve 的预处理同源。
     // 探测入口强制重新跟随：重解析就是用户取新鲜 xsec_token 的手段。

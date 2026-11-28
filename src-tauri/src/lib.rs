@@ -11,6 +11,7 @@ mod probe;
 mod progress;
 mod queue;
 mod resolve;
+mod update_policy;
 mod xiaohongshu;
 
 use queue::AppState;
@@ -47,7 +48,8 @@ pub fn run() {
             mcp_server::mcp_status,
             commands::google_oauth_login,
             commands::test_site,
-            component_updater::update_ytdlp_component
+            component_updater::update_ytdlp_component,
+            update_policy::refresh_update_policy
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

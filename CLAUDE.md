@@ -51,7 +51,8 @@ Rust 侧（`src-tauri/src/`，一模块一职责）：
 - `mcp_tools.rs` — MCP 工具面（probe_video/start_download/list_jobs/cancel_download），直连 queue/probe 管线；agent 面窄格式白名单（本次 probe 可见项 + `__best__`/`__audio_mp3__`）；未 probe 过的 URL 在 start_download 内自动先 probe；代理记忆 url→probe 用过的值
 - `mcp_prefs.rs` — 设置页偏好的 Rust 侧镜像：`StoreExt` 读 `settings.json`（proxyType/proxyAddr→`build_proxy_url` 对齐前端、outputDir 缺省回退系统下载目录）
 - `embedded_components.rs` — 内嵌组件释放底座：`ensure()` 优先读 `tools/<id>/active.json` 指针（热更过的版本，验 SHA 后用），否则从 include_bytes 的 gz 原子释放内嵌版；`install_remote()` 落新版本目录 + 原子翻转指针。清单来源的 id/version/fileName 一律过 `validate_segment`（限 `[A-Za-z0-9._+-]`）防路径穿越
-- `component_updater.rs` — IPC `update_ytdlp_component(channel, deviceId)`：查 `{DOWNLOADANY_API_BASE_URL}/api/updates/components/yt-dlp/<triple>/<当前版本>`（204=已最新；基址是 Rust 编译期 env，未配置则静默 no-op；release 强制 HTTPS）→ **SHA-256 + minisign 双校验**（与整包更新同一把公钥，硬编码在本文件）→ `install_remote`，下次 spawn 即新版本
+- `component_updater.rs` — IPC `update_ytdlp_component(channel, deviceId)`：查 `{DOWNLOADANY_API_BASE_URL}/api/updates/components/yt-dlp/<triple>/<当前版本>`（204=已最新；基址是 Rust 编译期 env，未配置则静默 no-op；release 强制 HTTPS）→ **SHA-256 + minisign 双校验**（与整包更新同一把公钥，硬编码在本文件）+ 防降级 + 签名 trusted comment 版本绑定（签名需 `tauri signer sign --app-version`）→ `install_remote` → `resolve::invalidate("yt-dlp")`，本次会话下次 spawn 即新版本
+- `update_policy.rs` — 强制更新策略：IPC `refresh_update_policy(channel, deviceId)` 查桌面端点同一 URL 的 `forced` 字段（tauri 插件不透出自定义字段，故 Rust 侧单独请求；基址缺位/204=不强制；网络失败沿用上次判定），命中后 `queue::probe_and_cache`/`queue::enqueue` 直接返回 `AppError::ForcedUpdate`（UI 与 MCP/agent 面共用这两个入口）。服务端 admin 登记/PATCH `forced:true|false` 控制，解除靠下一次成功刷新
 - `error.rs` — `AppError`（thiserror），序列化为字符串直接给前端展示
 
 前端（`src/`）：
@@ -60,7 +61,7 @@ Rust 侧（`src-tauri/src/`，一模块一职责）：
 - agent 下发的任务 UI 对等：事件层 `hydrateAgentJob`（500ms 宽限 + `list_jobs` 回填标题/清晰度）与 `recordJobStart` 埋点去重（`trackedStarted`/`pendingHydrate`），UI 入队与 agent 共用同一 started/terminal 口径
 - `types.ts` 是前后端契约，**必须镜像 Rust serde 结构（全部 `#[serde(rename_all = "camelCase")]`）**；改 Rust 结构必须同步改这里（如 `JobRecord.formatId` 支撑失败重试）
 - `App.tsx` 以 jobId 归并三个事件到 `jobs`/`logs` map；骨架记录可能先于 invoke resolve 到达，upsert 时勿覆盖未知字段。队列是纯内存的，重启即空（页面 HMR 重载后 Rust 状态还在，靠 `list_jobs` hydration 找回）
-- `lib/updater.ts` — 整包自更新 hook `useAppUpdater(hasActiveJobs)`（tauri-plugin-updater 纯前端编排，Rust 零逻辑）：启动 5s 自动静默 check（失败不打扰），发现新版本弹右下角浮动提示 `UpdateNotice`；手动 checkNow 不弹浮层，结果只在设置-关于页内展示（浮层可见时关于页更新块让位，保证同一时刻只有一处更新提示；收起浮层后回落为关于页入口）；请求头带 `X-DownloadAny-Device-Id/Channel`（服务端灰度分桶）；有 queued/running 任务时 install 进 `blocked`；skip 记版本进 store 后自动检查不再提示。组件热更新由 `App.tsx` 启动 15s 后触发，尽力而为、失败吞掉
+- `lib/updater.ts` — 整包自更新 hook `useAppUpdater(hasActiveJobs)`（tauri-plugin-updater 前端编排 + Rust `update_policy` 查 forced）：启动 5s 自动静默 check（失败不打扰），发现新版本弹右下角浮动提示 `UpdateNotice`；手动 checkNow 不弹浮层，结果只在设置-关于页内展示（浮层可见时关于页更新块让位，保证同一时刻只有一处更新提示；收起浮层后回落为关于页入口）；请求头带 `X-DownloadAny-Device-Id/Channel`（服务端灰度分桶）；有 queued/running 任务时 install 进 `blocked`；skip 记版本进 store 后自动检查不再提示。**强制更新**：与 check 并行调 `refresh_update_policy`，`state.forced=true` 时改渲染全屏不可关闭门禁 `ForcedUpdateGate`（禁用稍后/跳过、隐藏 UpdateNotice），Rust 侧同时拒绝解析/下载；后台解除后启动检查与 30min 轮询收敛。组件热更新由 `App.tsx` 启动 15s 后触发，尽力而为、失败吞掉
 - 设置（下载目录、自动下载、updateChannel/skippedUpdateVersion）用 `@tauri-apps/plugin-store`；目录选择用 `@tauri-apps/plugin-dialog`；已完成任务的"在文件夹中显示"用 `@tauri-apps/plugin-opener` 的 `revealItemInDir`
 - ffmpeg 只认单横线 `-version`（yt-dlp 用 `--version`）——版本探测与脚本校验都按工具区分参数；`dependency_info` 有 OnceLock 缓存避免重复付费
 

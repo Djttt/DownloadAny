@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 把已发布到 GitHub Release 的签名更新产物登记到自托管更新服务器（api.lumeany.cc）。
 #
-#   ./scripts/publish-server-release.sh [版本号] [--rollout N] [--min-version X.Y.Z] [--notes "文案"]
+#   ./scripts/publish-server-release.sh [版本号] [--rollout N] [--min-version X.Y.Z] [--notes "文案"] [--forced]
 #
 # 做四件事：
 #   1) 从 GitHub Release v<ver> 下载 updater 四件套：
@@ -25,12 +25,13 @@ API="${API:-https://api.lumeany.cc}"
 REMOTE_ROOT="${REMOTE_ROOT:-/srv/downloadany}"
 REPO="${REPO:-Djttt/DownloadAny}"
 
-VER=""; ROLLOUT=100; MIN_VERSION=""; NOTES=""
+VER=""; ROLLOUT=100; MIN_VERSION=""; NOTES=""; FORCED=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --rollout)     ROLLOUT="$2"; shift 2 ;;
     --min-version) MIN_VERSION="$2"; shift 2 ;;
     --notes)       NOTES="$2"; shift 2 ;;
+    --forced)      FORCED=true; shift ;;
     *)             VER="$1"; shift ;;
   esac
 done
@@ -85,16 +86,16 @@ ssh -o BatchMode=yes "$SERVER" \
 echo "== [3/4] 服务器侧 admin 登记 windows + macos 两条 =="
 # ssh 会把参数拼成一条远端命令字符串，含空格的 NOTES/MIN_VERSION 需 %q 转义后再传输
 ssh -o BatchMode=yes "$SERVER" 'bash -s' -- \
-  "$VER" "$ROLLOUT" "$(printf '%q' "$MIN_VERSION")" "$(printf '%q' "$NOTES")" "$REMOTE_ROOT" "${names[@]}" <<'REMOTE'
+  "$VER" "$ROLLOUT" "$FORCED" "$(printf '%q' "$MIN_VERSION")" "$(printf '%q' "$NOTES")" "$REMOTE_ROOT" "${names[@]}" <<'REMOTE'
 set -euo pipefail
-VER="$1"; ROLLOUT="$2"; MINV="$3"; NOTES="$4"; ROOT_D="$5"; shift 5
+VER="$1"; ROLLOUT="$2"; FORCED="$3"; MINV="$4"; NOTES="$5"; ROOT_D="$6"; shift 6
 NAMES=("$@")
-python3 - "$VER" "$ROLLOUT" "$MINV" "$NOTES" "$ROOT_D" "${NAMES[@]}" <<'PY'
+python3 - "$VER" "$ROLLOUT" "$FORCED" "$MINV" "$NOTES" "$ROOT_D" "${NAMES[@]}" <<'PY'
 import json, subprocess, sys, urllib.request
 
 argv = sys.argv[1:]
-ver, rollout, minv, notes, root = argv[:5]
-names = argv[5:]
+ver, rollout, forced, minv, notes, root = argv[:6]
+names = argv[6:]
 win_exe = next(n for n in names if n.lower().endswith("-setup.exe"))
 win_sig = win_exe + ".sig"
 mac_tgz = next(n for n in names if n.endswith(".app.tar.gz"))
@@ -107,7 +108,8 @@ def publish(target, arch, fname, sig_file):
     sig = open(f"{root}/desktop/{ver}/{sig_file}").read().strip()
     body = {"version": ver, "channel": "stable", "target": target, "arch": arch,
             "artifact_path": f"desktop/{ver}/{fname}", "signature": sig,
-            "notes": notes, "rollout_percent": int(rollout)}
+            "notes": notes, "rollout_percent": int(rollout),
+            "forced": forced == "true"}
     if minv:
         body["minimum_version"] = minv
     req = urllib.request.Request("http://127.0.0.1:8000/api/updates/admin/desktop",
@@ -130,4 +132,5 @@ curl -s -m10 "$API/api/updates/desktop/darwin/aarch64/0.0.0" | python3 -m json.t
 
 echo
 echo "完成。后续：灰度调整 PATCH $API/api/updates/admin/desktop/<id> {\"rollout_percent\":N}；"
+echo "强制开关 PATCH 同路径 {\"forced\":true|false}（仅识别该字段的客户端≥带 update_policy 的版本生效）；"
 echo "急停   DELETE $API/api/updates/admin/desktop/<id>。"

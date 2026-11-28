@@ -287,6 +287,9 @@ const zh = {
   "update.failed": "更新操作失败，请稍后重试。",
   "update.later": "稍后",
   "update.skip": "跳过此版本",
+  "update.required": "需要更新到 v{version}",
+  "update.requiredHint": "当前版本已停用。完成更新后才能继续使用解析与下载服务；正在进行的任务完成后即可安装。",
+  "update.retry": "重新检查",
 } as const;
 
 export type TKey = keyof typeof zh;
@@ -558,6 +561,9 @@ const en: Record<TKey, string> = {
   "update.failed": "The update failed. Try again later.",
   "update.later": "Later",
   "update.skip": "Skip this version",
+  "update.required": "Update to v{version} is required",
+  "update.requiredHint": "This version has been retired. Parsing and downloads unlock once you finish updating; wait for active tasks to complete before installing.",
+  "update.retry": "Re-check",
 };
 
 function systemLang(): Lang {

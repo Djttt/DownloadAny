@@ -21,6 +21,8 @@ pub enum AppError {
     ShortLink(String),
     #[error("暂不支持播放列表/频道链接，请输入单个视频链接")]
     PlaylistUnsupported,
+    #[error("当前版本已停用：请先完成强制更新，再继续使用下载服务")]
+    ForcedUpdate,
     #[error("启动下载进程失败：{0}")]
     Spawn(String),
     #[error("解析 yt-dlp 输出失败：{0}")]

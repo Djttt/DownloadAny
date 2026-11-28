@@ -64,6 +64,18 @@ export interface ComponentUpdateResult {
 export const updateYtdlpComponent = (channel: "stable" | "beta", deviceId: string) =>
   invoke<ComponentUpdateResult>("update_ytdlp_component", { channel, deviceId });
 
+// ---- forced-update policy ----
+
+export interface UpdatePolicyStatus {
+  currentVersion: string;
+  latestVersion: string | null;
+  forced: boolean;
+  notes: string | null;
+}
+
+export const refreshUpdatePolicy = (channel: "stable" | "beta", deviceId: string) =>
+  invoke<UpdatePolicyStatus>("refresh_update_policy", { channel, deviceId });
+
 // ---- events ----
 
 export const onJobStatus = (handler: (e: StatusEvent) => void) =>
